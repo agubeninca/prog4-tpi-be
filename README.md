@@ -4,23 +4,29 @@ API de **Kitch**, menú digital y pedidos desde la mesa (TP Integrador · Progra
 
 **Stack:** NestJS 11 · MySQL + Prisma 6 · Firebase (Auth, Firestore y Storage en emuladores) con `firebase-admin` · Sharp · decimal.js · dayjs.
 
-## Requisitos
+## Requisitos (macOS, Windows o Linux)
 
-- Node ≥ 20
-- MySQL corriendo en `localhost:3306`
-- Java 17+ (para el emulador de Firestore)
+- **Node ≥ 20**
+- **MySQL** corriendo (macOS: `brew install mysql` · Windows: XAMPP o MySQL Installer)
+- **Java ≥ 11**, para el emulador de Firestore (macOS: `brew install openjdk@21` · Windows: `winget install EclipseAdoptium.Temurin.21.JDK`)
 
-## Primer arranque
+No hace falta crear la base ni instalar nada de Firebase: lo hace el arranque.
+
+## Arranque: un solo comando
 
 ```bash
-npm install
-cp .env.example .env          # completar usuario y contraseña de MySQL en DATABASE_URL
-npm run emulators             # terminal 1: Auth :9099 · Firestore :8080 · Storage :9199 · UI :4000
-npm start                     # terminal 2: migraciones + cliente Prisma + API en :3000 (watch)
-npm run prisma:seed           # una vez, con los emuladores arriba: crea el personal
+npm start
 ```
 
-El proyecto Firebase es `demo-kitch` (prefijo `demo-`): los emuladores no necesitan cuenta ni `firebase login`. El estado de los emuladores se guarda en `firebase-emulator-data/` al cerrarlos con Ctrl+C.
+La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario y la contraseña de MySQL (en `.env.example` hay ejemplos para macOS, XAMPP y MySQL 8). Después, cada `npm start`:
+
+1. Verifica Node, el `.env`, MySQL y Java, y si falta algo dice cómo instalarlo según tu sistema.
+2. Instala dependencias si faltan o cambiaron.
+3. Aplica las migraciones (crea la base `kitch` si no existe) y genera el cliente de Prisma.
+4. Levanta los emuladores de Firebase (Auth :9099 · Firestore :8080 · Storage :9199 · UI :4000) y espera a que estén listos.
+5. Corre el seed (idempotente) y arranca la API en http://localhost:3000.
+
+**Ctrl+C** cierra todo, y los emuladores guardan su estado en `firebase-emulator-data/`. El proyecto Firebase es `demo-kitch` (prefijo `demo-`): no hace falta cuenta ni `firebase login`. Si preferís tener los emuladores en otra terminal, corré `npm run emulators` antes: `npm start` los detecta y los usa.
 
 ### Usuarios de prueba (seed)
 
@@ -53,7 +59,7 @@ Los endpoints protegidos esperan `Authorization: Bearer <ID token de Firebase>`.
 
 | Script | Qué hace |
 |---|---|
-| `npm start` | Verifica MySQL, aplica migraciones, genera el cliente y levanta con watch |
-| `npm run emulators` | Emuladores de Firebase con import/export de datos |
+| `npm start` | Arranque completo: verificaciones, migraciones, emuladores, seed y API con watch |
+| `npm run emulators` | Solo los emuladores (opcional, en otra terminal) |
 | `npm run prisma:seed` | Seed idempotente (por ahora, solo el personal) |
 | `npm run build` / `npm run lint` | Compilación / ESLint + Prettier |
