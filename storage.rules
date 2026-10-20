@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Las imágenes de productos son públicas (las ve la Vista Cliente sin login).
+// Solo el backend sube archivos (firebase-admin ignora estas reglas).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /productos/{archivo} {
+      allow read: if true;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Solo el backend escribe (firebase-admin ignora estas reglas).
+// El personal logueado lee las comandas activas para el panel de cocina en tiempo real.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /pedidos_activos/{idPedido} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

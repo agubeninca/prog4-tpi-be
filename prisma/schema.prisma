@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model cliente {
+  dni                 String   @id @db.VarChar(10)
+  nombre              String   @db.VarChar(100)
+  fecha_creacion      DateTime @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime @default(now()) @updatedAt @db.DateTime(0)
+  pedido              pedido[]
+}
+
+model categoria {
+  id_categoria        Int        @id @default(autoincrement())
+  nombre              String     @db.VarChar(100)
+  descripcion         String?    @db.VarChar(255)
+  archivado           Boolean    @default(false)
+  fecha_creacion      DateTime   @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime   @default(now()) @updatedAt @db.DateTime(0)
+  producto            producto[]
+}
+
+model producto {
+  id_producto         Int              @id @default(autoincrement())
+  id_categoria        Int
+  nombre              String           @db.VarChar(150)
+  descripcion         String?          @db.VarChar(500)
+  precio              Decimal          @db.Decimal(10, 2)
+  estado_pausado      Boolean          @default(false)
+  ruta_imagen         String?          @db.VarChar(255)
+  archivado           Boolean          @default(false)
+  fecha_creacion      DateTime         @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime         @default(now()) @updatedAt @db.DateTime(0)
+  categoria           categoria        @relation(fields: [id_categoria], references: [id_categoria], onDelete: NoAction, onUpdate: NoAction, map: "fk_producto_categoria")
+  detalle_pedido      detalle_pedido[]
+
+  @@index([id_categoria], map: "fk_producto_categoria")
+}
+
+model mesa {
+  id_mesa             Int      @id @default(autoincrement())
+  numero_mesa         Int      @unique(map: "uq_mesa_numero")
+  hash_codigo_qr      String   @unique(map: "uq_mesa_hash_codigo_qr") @db.VarChar(64)
+  activa              Boolean  @default(true)
+  archivado           Boolean  @default(false)
+  fecha_creacion      DateTime @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime @default(now()) @updatedAt @db.DateTime(0)
+  pedido              pedido[]
+}
+
+model pedido {
+  id_pedido           Int              @id @default(autoincrement())
+  id_mesa             Int
+  dni_cliente         String           @db.VarChar(10)
+  fecha_hora_ingreso  DateTime         @default(now()) @db.DateTime(0)
+  estado              pedido_estado    @default(PENDIENTE)
+  motivo_cancelacion  String?          @db.VarChar(255)
+  precio_total        Decimal          @db.Decimal(10, 2)
+  fecha_actualizacion DateTime         @default(now()) @updatedAt @db.DateTime(0)
+  mesa                mesa             @relation(fields: [id_mesa], references: [id_mesa], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mesa")
+  cliente             cliente          @relation(fields: [dni_cliente], references: [dni], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_cliente")
+  detalle_pedido      detalle_pedido[]
+  review              review[]
+
+  @@index([id_mesa], map: "fk_pedido_mesa")
+  @@index([dni_cliente], map: "fk_pedido_cliente")
+  @@index([estado, fecha_hora_ingreso], map: "idx_pedido_estado_fecha")
+}
+
+model detalle_pedido {
+  id_detalle      Int      @id @default(autoincrement())
+  id_pedido       Int
+  id_producto     Int
+  cantidad        Int
+  precio_unitario Decimal  @db.Decimal(10, 2)
+  subtotal        Decimal  @db.Decimal(10, 2)
+  pedido          pedido   @relation(fields: [id_pedido], references: [id_pedido], onDelete: NoAction, onUpdate: NoAction, map: "fk_detalle_pedido_pedido")
+  producto        producto @relation(fields: [id_producto], references: [id_producto], onDelete: NoAction, onUpdate: NoAction, map: "fk_detalle_pedido_producto")
+
+  @@index([id_pedido], map: "fk_detalle_pedido_pedido")
+  @@index([id_producto], map: "fk_detalle_pedido_producto")
+}
+
+model review {
+  id_review  Int      @id @default(autoincrement())
+  id_pedido  Int
+  puntuacion Int      @db.TinyInt
+  comentario String?  @db.VarChar(500)
+  fecha_hora DateTime @default(now()) @db.DateTime(0)
+  pedido     pedido   @relation(fields: [id_pedido], references: [id_pedido], onDelete: NoAction, onUpdate: NoAction, map: "fk_review_pedido")
+
+  @@index([id_pedido], map: "fk_review_pedido")
+}
+
+model usuario {
+  id_usuario          Int         @id @default(autoincrement())
+  firebase_uid        String      @unique(map: "uq_usuario_firebase_uid") @db.VarChar(128)
+  email               String      @unique(map: "uq_usuario_email") @db.VarChar(150)
+  nombre              String      @db.VarChar(100)
+  rol                 usuario_rol
+  archivado           Boolean     @default(false)
+  fecha_creacion      DateTime    @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime    @default(now()) @updatedAt @db.DateTime(0)
+}
+
+enum pedido_estado {
+  PENDIENTE
+  EN_PREPARACION
+  SERVIDO
+  CANCELADO
+}
+
+enum usuario_rol {
+  ADMIN
+  COCINA
+}
