@@ -48,6 +48,7 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | GET | `/pedidos?estado=&fecha=` | ADMIN, COCINA |
 | PATCH | `/pedidos/:id/estado` | ADMIN, COCINA |
 | CRUD | `/categorias`, `/productos`, `/mesas`, `/usuarios` | ADMIN |
+| GET | `/clientes?q=` · `/clientes/:dni` | ADMIN (listado con métricas · ficha con pedidos y reviews) |
 | PATCH | `/productos/:id/pausa` · POST `/productos/:id/imagen` | ADMIN |
 | POST | `/mesas/:id/regenerar-qr` | ADMIN |
 | GET | `/reviews` · `/reportes/ventas-dia?fecha=` | ADMIN |

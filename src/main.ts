@@ -13,6 +13,8 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      // Un solo mensaje por campo: el primero que falla ("es obligatorio" antes que "mínimo 3").
+      stopAtFirstError: true,
     }),
   );
   app.useGlobalFilters(new PrismaClientExceptionFilter());
