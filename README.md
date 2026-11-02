@@ -30,10 +30,10 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 
 ### Usuarios de prueba (seed)
 
-| Rol | Email | Contraseña |
+| Rol | Usuario | Contraseña |
 |---|---|---|
-| ADMIN | `admin@kitch.local` | `admin123` |
-| COCINA | `cocina@kitch.local` | `cocina123` |
+| ADMIN | `admin` | `admin123` |
+| COCINA | `cocina` | `cocina123` |
 
 ## Endpoints
 
@@ -41,7 +41,8 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 |---|---|---|
 | GET | `/mesas/qr/:hash` | Público |
 | GET | `/menu` | Público |
-| POST | `/clientes/identificar` | Público |
+| GET | `/clientes/consulta/:dni` | Público (¿DNI registrado? + nombre enmascarado "A*** B***") |
+| POST | `/clientes/identificar` | Público (crea el cliente; si ya existe no pisa ni devuelve el nombre) |
 | POST | `/pedidos` | Público |
 | GET | `/pedidos/:id?dni=` | Público (solo con el DNI del pedido) |
 | POST | `/pedidos/:id/reviews` | Público (solo con el DNI del pedido) |
@@ -49,6 +50,8 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | PATCH | `/pedidos/:id/estado` | ADMIN, COCINA |
 | CRUD | `/categorias`, `/productos`, `/mesas`, `/usuarios` | ADMIN |
 | GET | `/clientes?q=` · `/clientes/:dni` | ADMIN (listado con métricas · ficha con pedidos y reviews) |
+| PATCH | `/clientes/:dni` | ADMIN (corregir el nombre) |
+| DELETE | `/clientes/:dni` | ADMIN (solo clientes sin pedidos; con pedidos → 409) |
 | PATCH | `/productos/:id/pausa` · POST `/productos/:id/imagen` | ADMIN |
 | POST | `/mesas/:id/regenerar-qr` | ADMIN |
 | GET | `/reviews` · `/reportes/ventas-dia?fecha=` | ADMIN |

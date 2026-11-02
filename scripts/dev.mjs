@@ -257,7 +257,7 @@ function arrancarApi(emuladores) {
   console.log(
     `\n${verde('Kitch')} · API ${verde('http://localhost:3000')} · UI de emuladores ${verde('http://127.0.0.1:4000')}`,
   );
-  console.log(gris('Personal de prueba: admin@kitch.local / admin123 · cocina@kitch.local / cocina123'));
+  console.log(gris('Personal de prueba: usuario admin / admin123 · usuario cocina / cocina123'));
   console.log(gris('Ctrl+C para detener todo (los emuladores guardan sus datos al cerrar).\n'));
 
   const api = spawn(`${bin('nest')} start --watch`, { shell: true, stdio: 'inherit' });

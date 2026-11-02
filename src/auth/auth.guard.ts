@@ -45,7 +45,7 @@ export class AuthGuard implements CanActivate {
       select: {
         id_usuario: true,
         firebase_uid: true,
-        email: true,
+        nombre_usuario: true,
         nombre: true,
         rol: true,
       },

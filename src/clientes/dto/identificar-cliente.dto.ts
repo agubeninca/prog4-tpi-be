@@ -1,5 +1,6 @@
 import {
   IsNotEmpty,
+  IsOptional,
   IsString,
   Matches,
   MaxLength,
@@ -16,9 +17,11 @@ export class IdentificarClienteDto {
   @IsString({ message: 'El DNI es obligatorio' })
   dni: string;
 
+  // Obligatorio solo la primera vez (cliente nuevo). Si el DNI ya está registrado se ignora:
+  // desde la mesa no se puede cambiar el nombre de otro (lo corrige el admin).
   // Se guarda en cliente.nombre (DER): nombre y apellido en un solo campo.
-  // El mínimo se cuenta después del trim, así "  ab  " no pasa.
   @Trim()
+  @IsOptional()
   @MaxLength(100, {
     message: 'El nombre y apellido no puede superar los 100 caracteres',
   })
@@ -27,5 +30,5 @@ export class IdentificarClienteDto {
   })
   @IsNotEmpty({ message: 'El nombre y apellido es obligatorio' })
   @IsString({ message: 'El nombre y apellido es obligatorio' })
-  nombre: string;
+  nombre?: string;
 }

@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { UsuarioAutenticado } from '../auth/auth.types.js';
 import { CreateUsuarioDto } from './dto/create-usuario.dto.js';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto.js';
+import { emailInterno } from './cuenta-firebase.js';
 
 @Injectable()
 export class UsuariosService {
@@ -18,12 +19,18 @@ export class UsuariosService {
     private readonly firebase: FirebaseService,
   ) {}
 
-  async create({ email, password, nombre, rol }: CreateUsuarioDto) {
+  async create({ nombre_usuario, password, nombre, rol }: CreateUsuarioDto) {
     const registro = await this.firebase.auth
-      .createUser({ email, password, displayName: nombre })
+      .createUser({
+        email: emailInterno(nombre_usuario),
+        password,
+        displayName: nombre,
+      })
       .catch((error: unknown) => {
         if (codigoFirebase(error) === 'auth/email-already-exists') {
-          throw new ConflictException('Ya existe un usuario con ese email');
+          throw new ConflictException(
+            `Ya existe un usuario "${nombre_usuario}"`,
+          );
         }
         throw new BadRequestException(
           error instanceof Error
@@ -34,7 +41,7 @@ export class UsuariosService {
 
     try {
       return await this.prisma.usuario.create({
-        data: { firebase_uid: registro.uid, email, nombre, rol },
+        data: { firebase_uid: registro.uid, nombre_usuario, nombre, rol },
       });
     } catch (error) {
       // Sin la fila en MySQL la cuenta no sirve: se borra para no dejarla huérfana.

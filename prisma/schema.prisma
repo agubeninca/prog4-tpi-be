@@ -101,7 +101,7 @@ model review {
 model usuario {
   id_usuario          Int         @id @default(autoincrement())
   firebase_uid        String      @unique(map: "uq_usuario_firebase_uid") @db.VarChar(128)
-  email               String      @unique(map: "uq_usuario_email") @db.VarChar(150)
+  nombre_usuario      String      @unique(map: "uq_usuario_nombre_usuario") @db.VarChar(30)
   nombre              String      @db.VarChar(100)
   rol                 usuario_rol
   archivado           Boolean     @default(false)

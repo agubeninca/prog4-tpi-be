@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { PrismaClient, usuario_rol } from '../generated/prisma/client.js';
+import { emailInterno } from '../src/usuarios/cuenta-firebase.js';
 
 // Seed idempotente: se puede correr varias veces sin duplicar datos.
 // Por ahora carga solo al personal (sin un ADMIN inicial no se puede entrar al panel).
@@ -9,13 +10,13 @@ import { PrismaClient, usuario_rol } from '../generated/prisma/client.js';
 
 const PERSONAL = [
   {
-    email: 'admin@kitch.local',
+    nombre_usuario: 'admin',
     password: 'admin123',
     nombre: 'Administración',
     rol: usuario_rol.ADMIN,
   },
   {
-    email: 'cocina@kitch.local',
+    nombre_usuario: 'cocina',
     password: 'cocina123',
     nombre: 'Cocina',
     rol: usuario_rol.COCINA,
@@ -35,10 +36,11 @@ const app =
 const auth = getAuth(app);
 
 async function asegurarCuentaFirebase(
-  email: string,
+  nombreUsuario: string,
   password: string,
   nombre: string,
 ): Promise<UserRecord> {
+  const email = emailInterno(nombreUsuario);
   try {
     return await auth.getUserByEmail(email);
   } catch (error) {
@@ -57,14 +59,14 @@ async function asegurarCuentaFirebase(
 }
 
 async function seedPersonal() {
-  for (const { email, password, nombre, rol } of PERSONAL) {
-    const cuenta = await asegurarCuentaFirebase(email, password, nombre);
+  for (const { nombre_usuario, password, nombre, rol } of PERSONAL) {
+    const cuenta = await asegurarCuentaFirebase(nombre_usuario, password, nombre);
     await prisma.usuario.upsert({
-      where: { email },
+      where: { nombre_usuario },
       update: { firebase_uid: cuenta.uid, archivado: false },
-      create: { firebase_uid: cuenta.uid, email, nombre, rol },
+      create: { firebase_uid: cuenta.uid, nombre_usuario, nombre, rol },
     });
-    console.log(`  ✔ ${rol.padEnd(6)} ${email} / ${password}`);
+    console.log(`  ✔ ${rol.padEnd(6)} usuario: ${nombre_usuario} / contraseña: ${password}`);
   }
 }
 

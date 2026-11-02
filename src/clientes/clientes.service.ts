@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { pedido_estado } from '../../generated/prisma/client.js';
+import { pedido_estado, Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { INCLUDE_PEDIDO } from '../pedidos/pedido.include.js';
 import { IdentificarClienteDto } from './dto/identificar-cliente.dto.js';
 import { FiltroClientesDto } from './dto/filtro-clientes.dto.js';
+import { ActualizarClienteDto } from './dto/actualizar-cliente.dto.js';
 
 /** Promedio con un decimal, o null si no hay valores. */
 function promedio(valores: number[]) {
@@ -16,17 +22,57 @@ function promedio(valores: number[]) {
   );
 }
 
+/**
+ * "Agustín Beninca" → "A*** B***": alcanza para que la persona se reconozca
+ * sin exponer el nombre de otros a quien pruebe DNIs (largo fijo, no revela cuántas letras tiene).
+ */
+export function enmascararNombre(nombre: string) {
+  return nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((palabra) => `${palabra.charAt(0).toUpperCase()}***`)
+    .join(' ');
+}
+
 @Injectable()
 export class ClientesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** RB-04: el DNI + nombre generan o actualizan el registro del cliente. */
-  identificar({ dni, nombre }: IdentificarClienteDto) {
-    return this.prisma.cliente.upsert({
-      where: { dni },
-      update: { nombre },
-      create: { dni, nombre },
-    });
+  /** Antes de pedir el nombre: ¿el DNI ya está registrado? (público, con el nombre enmascarado). */
+  async consultar(dni: string) {
+    const cliente = await this.prisma.cliente.findUnique({ where: { dni } });
+    return cliente
+      ? {
+          registrado: true,
+          nombre_enmascarado: enmascararNombre(cliente.nombre),
+        }
+      : { registrado: false, nombre_enmascarado: null };
+  }
+
+  /**
+   * RB-04: el DNI + nombre generan el registro del cliente. Si el DNI ya existe, la persona confirmó
+   * que es ella ("¿Sos A*** B***?") y el nombre NO se pisa ni se devuelve: desde la mesa no se puede
+   * cambiar ni averiguar el nombre de otro. El admin lo corrige con PATCH /clientes/:dni.
+   */
+  async identificar({ dni, nombre }: IdentificarClienteDto) {
+    const existente = await this.prisma.cliente.findUnique({ where: { dni } });
+    if (existente) {
+      return { dni, nombre: null, registrado: true };
+    }
+    if (!nombre) {
+      throw new BadRequestException('El nombre y apellido es obligatorio');
+    }
+    const nuevo = await this.prisma.cliente.create({ data: { dni, nombre } });
+    return { dni: nuevo.dni, nombre: nuevo.nombre, registrado: false };
+  }
+
+  /** El admin corrige el nombre (por ejemplo, si la persona lo escribió mal la primera vez). */
+  async actualizar(dni: string, { nombre }: ActualizarClienteDto) {
+    const cliente = await this.prisma.cliente.findUnique({ where: { dni } });
+    if (!cliente) {
+      throw new NotFoundException(`No hay un cliente con DNI ${dni}`);
+    }
+    return this.prisma.cliente.update({ where: { dni }, data: { nombre } });
   }
 
   /** Listado para el panel, con métricas de pedidos y reviews de cada cliente. */
@@ -152,5 +198,38 @@ export class ClientesService {
       pedidos,
       reviews,
     };
+  }
+
+  /**
+   * Elimina un cliente sin pedidos (ej. un DNI mal tipeado). Si tiene pedidos no se borra:
+   * son parte del historial de ventas (RF-08), de las reviews y del resumen.
+   */
+  async remove(dni: string) {
+    const cliente = await this.prisma.cliente.findUnique({ where: { dni } });
+    if (!cliente) {
+      throw new NotFoundException(`No hay un cliente con DNI ${dni}`);
+    }
+    const pedidos = await this.prisma.pedido.count({
+      where: { dni_cliente: dni },
+    });
+    if (pedidos > 0) {
+      throw new ConflictException(
+        `No se puede eliminar: el cliente tiene ${pedidos} pedido(s), que forman parte del historial de ventas`,
+      );
+    }
+    try {
+      return await this.prisma.cliente.delete({ where: { dni } });
+    } catch (error) {
+      // Hizo un pedido justo entre el conteo y el borrado: la FK de pedido lo impide.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new ConflictException(
+          'No se puede eliminar: el cliente acaba de hacer un pedido',
+        );
+      }
+      throw error;
+    }
   }
 }

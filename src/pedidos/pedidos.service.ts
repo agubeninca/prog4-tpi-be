@@ -48,12 +48,15 @@ export class PedidosService {
         );
       }
 
-      // RB-04: el DNI + nombre generan o actualizan el cliente.
-      await tx.cliente.upsert({
-        where: { dni },
-        update: { nombre },
-        create: { dni, nombre },
-      });
+      // RB-04: el DNI + nombre generan el cliente. Si ya existe, el nombre no se pisa
+      // (desde la mesa no se puede cambiar el de otro; lo corrige el admin).
+      const cliente = await tx.cliente.findUnique({ where: { dni } });
+      if (!cliente) {
+        if (!nombre) {
+          throw new BadRequestException('El nombre y apellido es obligatorio');
+        }
+        await tx.cliente.create({ data: { dni, nombre } });
+      }
 
       // Un mismo producto agregado dos veces se suma en una sola línea.
       const cantidades = new Map<number, number>();
@@ -108,7 +111,8 @@ export class PedidosService {
     });
 
     await this.comandas.sincronizar(pedido);
-    return pedido;
+    // Respuesta pública: sin el nombre del cliente (se ve con solo saber un DNI).
+    return { ...pedido, cliente: undefined };
   }
 
   findAll({ estado, fecha }: FiltroPedidosDto) {
@@ -130,8 +134,10 @@ export class PedidosService {
   async findOneParaCliente(id: number, dni: string) {
     const pedido = await this.prisma.pedido.findFirst({
       where: { id_pedido: id, dni_cliente: dni },
+      // Sin el cliente: es público y alcanza con saber el DNI para consultarlo.
       include: {
-        ...INCLUDE_PEDIDO,
+        mesa: INCLUDE_PEDIDO.mesa,
+        detalle_pedido: INCLUDE_PEDIDO.detalle_pedido,
         review: { orderBy: { fecha_hora: 'desc' } },
       },
     });
