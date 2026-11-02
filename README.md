@@ -24,7 +24,7 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 2. Instala dependencias si faltan o cambiaron.
 3. Aplica las migraciones (crea la base `kitch` si no existe) y genera el cliente de Prisma.
 4. Levanta los emuladores de Firebase (Auth :9099 · Firestore :8080 · Storage :9199 · UI :4000) y espera a que estén listos.
-5. Corre el seed (idempotente) y arranca la API en http://localhost:3000.
+5. Corre el seed (idempotente) y arranca la API en http://localhost:3000. Con la base vacía, carga un menú de ejemplo de cafetería y 6 mesas.
 
 **Ctrl+C** cierra todo, y los emuladores guardan su estado en `firebase-emulator-data/`. El proyecto Firebase es `demo-kitch` (prefijo `demo-`): no hace falta cuenta ni `firebase login`. Si preferís tener los emuladores en otra terminal, corré `npm run emulators` antes: `npm start` los detecta y los usa.
 
@@ -65,5 +65,5 @@ Los endpoints protegidos esperan `Authorization: Bearer <ID token de Firebase>`.
 |---|---|
 | `npm start` | Arranque completo: verificaciones, migraciones, emuladores, seed y API con watch |
 | `npm run emulators` | Solo los emuladores (opcional, en otra terminal) |
-| `npm run prisma:seed` | Seed idempotente (por ahora, solo el personal) |
+| `npm run prisma:seed` | Seed idempotente: personal siempre; menú de ejemplo (5 categorías, 21 productos con imagen) y 6 mesas solo si la base no tiene ninguna |
 | `npm run build` / `npm run lint` | Compilación / ESLint + Prettier |
