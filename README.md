@@ -55,6 +55,8 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | PATCH | `/productos/:id/pausa` · POST `/productos/:id/imagen` | ADMIN |
 | POST | `/mesas/:id/regenerar-qr` | ADMIN |
 | GET | `/reviews` · `/reportes/ventas-dia?fecha=` | ADMIN |
+| POST | `/errores` | Público (el frontend reporta sus errores; se guardan en Firestore) |
+| GET · DELETE | `/errores?tipo=&limite=` | ADMIN (listar / vaciar el log de errores) |
 | GET | `/auth/me` | Personal logueado |
 
 Los endpoints protegidos esperan `Authorization: Bearer <ID token de Firebase>`.

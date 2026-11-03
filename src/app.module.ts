@@ -3,6 +3,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { FirebaseModule } from './firebase/firebase.module.js';
+import { ErroresModule } from './errores/errores.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsuariosModule } from './usuarios/usuarios.module.js';
 import { CategoriasModule } from './categorias/categorias.module.js';
@@ -18,6 +19,7 @@ import { ReportesModule } from './reportes/reportes.module.js';
   imports: [
     PrismaModule,
     FirebaseModule,
+    ErroresModule,
     AuthModule,
     UsuariosModule,
     CategoriasModule,
