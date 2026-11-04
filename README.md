@@ -46,7 +46,7 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | POST | `/pedidos` | Público |
 | GET | `/pedidos/:id?dni=` | Público (solo con el DNI del pedido) |
 | POST | `/pedidos/:id/reviews` | Público (solo con el DNI del pedido) |
-| GET | `/pedidos?estado=&fecha=` | ADMIN, COCINA |
+| GET | `/pedidos?estado=&fecha=&desde=&hasta=&q=&numero_mesa=` | ADMIN, COCINA (historial; hasta 500, más nuevos primero) |
 | PATCH | `/pedidos/:id/estado` | ADMIN, COCINA |
 | CRUD | `/categorias`, `/productos`, `/mesas`, `/usuarios` | ADMIN |
 | GET | `/clientes?q=` · `/clientes/:dni` | ADMIN (listado con métricas · ficha con pedidos y reviews) |

@@ -115,13 +115,23 @@ export class PedidosService {
     return { ...pedido, cliente: undefined };
   }
 
-  findAll({ estado, fecha }: FiltroPedidosDto) {
-    const rango = fecha ? rangoDelDia(fecha) : undefined;
+  /** Historial de pedidos, del más nuevo al más viejo (hasta 500). */
+  findAll({ estado, fecha, desde, hasta, q, numero_mesa }: FiltroPedidosDto) {
+    const fechas = fecha
+      ? { gte: rangoDelDia(fecha).desde, lte: rangoDelDia(fecha).hasta }
+      : {
+          ...(desde && { gte: rangoDelDia(desde).desde }),
+          ...(hasta && { lte: rangoDelDia(hasta).hasta }),
+        };
     return this.prisma.pedido.findMany({
       where: {
         estado,
-        ...(rango && {
-          fecha_hora_ingreso: { gte: rango.desde, lte: rango.hasta },
+        ...(Object.keys(fechas).length > 0 && { fecha_hora_ingreso: fechas }),
+        ...(numero_mesa && { mesa: { numero_mesa } }),
+        ...(q && {
+          cliente: {
+            OR: [{ dni: { contains: q } }, { nombre: { contains: q } }],
+          },
         }),
       },
       orderBy: { fecha_hora_ingreso: 'desc' },
