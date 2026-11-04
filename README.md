@@ -54,7 +54,8 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | DELETE | `/clientes/:dni` | ADMIN (solo clientes sin pedidos; con pedidos → 409) |
 | PATCH | `/productos/:id/pausa` · POST `/productos/:id/imagen` | ADMIN |
 | POST | `/mesas/:id/regenerar-qr` | ADMIN |
-| GET | `/reviews` · `/reportes/ventas-dia?fecha=` | ADMIN |
+| GET | `/reviews?desde=&hasta=&dni=` · `/reportes/ventas-dia?fecha=` | ADMIN |
+| DELETE | `/reviews/:id` | ADMIN (borrado definitivo de una review) |
 | POST | `/errores` | Público (el frontend reporta sus errores; se guardan en Firestore) |
 | GET · DELETE | `/errores?tipo=&limite=` | ADMIN (listar / vaciar el log de errores) |
 | GET | `/auth/me` | Personal logueado |

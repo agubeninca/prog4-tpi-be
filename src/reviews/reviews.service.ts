@@ -33,12 +33,13 @@ export class ReviewsService {
     });
   }
 
-  async findAll({ desde, hasta }: FiltroReviewsDto) {
+  async findAll({ desde, hasta, dni }: FiltroReviewsDto) {
     const where = {
       fecha_hora: {
         ...(desde && { gte: rangoDelDia(desde).desde }),
         ...(hasta && { lte: rangoDelDia(hasta).hasta }),
       },
+      ...(dni && { pedido: { dni_cliente: dni } }),
     };
 
     const [reviews, resumen] = await Promise.all([
@@ -67,5 +68,16 @@ export class ReviewsService {
       cantidad: resumen._count,
       reviews,
     };
+  }
+
+  /** El admin elimina una review (por ejemplo, un comentario inapropiado). Es un borrado real. */
+  async remove(id_review: number) {
+    const review = await this.prisma.review.findUnique({
+      where: { id_review },
+    });
+    if (!review) {
+      throw new NotFoundException(`Review #${id_review} no encontrada`);
+    }
+    return this.prisma.review.delete({ where: { id_review } });
   }
 }

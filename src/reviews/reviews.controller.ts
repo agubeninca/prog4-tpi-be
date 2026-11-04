@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -29,5 +30,11 @@ export class ReviewsController {
   @Get('reviews')
   findAll(@Query() filtro: FiltroReviewsDto) {
     return this.reviewsService.findAll(filtro);
+  }
+
+  @Roles('ADMIN')
+  @Delete('reviews/:id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.reviewsService.remove(id);
   }
 }
