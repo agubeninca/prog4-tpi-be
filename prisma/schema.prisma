@@ -60,6 +60,8 @@ model pedido {
   dni_cliente         String           @db.VarChar(10)
   fecha_hora_ingreso  DateTime         @default(now()) @db.DateTime(0)
   estado              pedido_estado    @default(PENDIENTE)
+  pagado              pedido_pago      @default(PENDIENTE)
+  origen              pedido_origen    @default(QR)
   motivo_cancelacion  String?          @db.VarChar(255)
   precio_total        Decimal          @db.Decimal(10, 2)
   fecha_actualizacion DateTime         @default(now()) @updatedAt @db.DateTime(0)
@@ -67,6 +69,7 @@ model pedido {
   cliente             cliente          @relation(fields: [dni_cliente], references: [dni], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_cliente")
   detalle_pedido      detalle_pedido[]
   review              review[]
+  registro_manual     registro_comanda_manual?
 
   @@index([id_mesa], map: "fk_pedido_mesa")
   @@index([dni_cliente], map: "fk_pedido_cliente")
@@ -107,6 +110,24 @@ model usuario {
   archivado           Boolean     @default(false)
   fecha_creacion      DateTime    @default(now()) @db.DateTime(0)
   fecha_actualizacion DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  registro_manual     registro_comanda_manual[]
+}
+
+/// Registro de las comandas que el personal de Barra carga a mano (clientes que no usan el QR).
+model registro_comanda_manual {
+  id_registro Int      @id @default(autoincrement())
+  id_pedido   Int      @unique(map: "uq_registro_manual_pedido")
+  id_usuario  Int
+  /// Momento en que se cargó la comanda.
+  fecha_hora  DateTime @default(now()) @db.DateTime(0)
+  /// Copia de la comanda al momento de cargarla, ej.: "2 × Café con leche, 1 × Medialuna".
+  detalle     String   @db.VarChar(1000)
+  observacion String?  @db.VarChar(255)
+  pedido      pedido   @relation(fields: [id_pedido], references: [id_pedido], onDelete: NoAction, onUpdate: NoAction, map: "fk_registro_manual_pedido")
+  usuario     usuario  @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "fk_registro_manual_usuario")
+
+  @@index([id_usuario], map: "fk_registro_manual_usuario")
+  @@index([fecha_hora], map: "idx_registro_manual_fecha")
 }
 
 enum pedido_estado {
@@ -116,7 +137,18 @@ enum pedido_estado {
   CANCELADO
 }
 
+enum pedido_pago {
+  PENDIENTE
+  PAGADO
+}
+
+enum pedido_origen {
+  QR
+  MANUAL
+}
+
 enum usuario_rol {
   ADMIN
+  BARRA
   COCINA
 }

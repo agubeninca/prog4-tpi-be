@@ -22,6 +22,12 @@ const PERSONAL = [
     rol: usuario_rol.ADMIN,
   },
   {
+    nombre_usuario: 'barra',
+    password: 'barra123',
+    nombre: 'Barra',
+    rol: usuario_rol.BARRA,
+  },
+  {
     nombre_usuario: 'cocina',
     password: 'cocina123',
     nombre: 'Cocina',

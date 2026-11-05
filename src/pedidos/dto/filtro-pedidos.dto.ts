@@ -8,13 +8,17 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { pedido_estado } from '../../../generated/prisma/client.js';
+import { pedido_estado, pedido_pago } from '../../../generated/prisma/client.js';
 import { FECHA_MENSAJE, FECHA_REGEX, Trim } from '../../common/validaciones.js';
 
 export class FiltroPedidosDto {
   @IsOptional()
   @IsEnum(pedido_estado)
   estado?: pedido_estado;
+
+  @IsOptional()
+  @IsEnum(pedido_pago)
+  pagado?: pedido_pago;
 
   /** Un solo día (lo usa el Resumen). Si se indica, tiene prioridad sobre desde/hasta. */
   @IsOptional()

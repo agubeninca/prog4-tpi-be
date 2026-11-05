@@ -25,6 +25,13 @@ export class MesasController {
     return this.mesasService.buscarPorHash(hash);
   }
 
+  /** Mesas habilitadas, para que la Barra elija dónde va una comanda cargada a mano. */
+  @Roles('ADMIN', 'BARRA')
+  @Get('activas')
+  findActivas() {
+    return this.mesasService.findActivas();
+  }
+
   @Post()
   create(@Body() createMesaDto: CreateMesaDto) {
     return this.mesasService.create(createMesaDto);

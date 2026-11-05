@@ -34,6 +34,6 @@ export class CreateUsuarioDto {
   @IsString({ message: 'El nombre es obligatorio' })
   nombre: string;
 
-  @IsEnum(usuario_rol, { message: 'El rol debe ser ADMIN o COCINA' })
+  @IsEnum(usuario_rol, { message: 'El rol debe ser ADMIN, BARRA o COCINA' })
   rol: usuario_rol;
 }

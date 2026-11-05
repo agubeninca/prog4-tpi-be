@@ -41,6 +41,14 @@ export class MesasService {
     });
   }
 
+  findActivas() {
+    return this.prisma.mesa.findMany({
+      where: { activa: true, archivado: false },
+      orderBy: { numero_mesa: 'asc' },
+      select: { id_mesa: true, numero_mesa: true },
+    });
+  }
+
   async findOne(id: number) {
     const mesa = await this.prisma.mesa.findFirst({
       where: { id_mesa: id, archivado: false },
