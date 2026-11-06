@@ -61,6 +61,8 @@ model pedido {
   fecha_hora_ingreso  DateTime         @default(now()) @db.DateTime(0)
   estado              pedido_estado    @default(PENDIENTE)
   pagado              pedido_pago      @default(PENDIENTE)
+  /// Con qué se pagó (solo registro, no hay pasarela de pago). Null mientras está pendiente.
+  medio_pago          pedido_medio_pago?
   origen              pedido_origen    @default(QR)
   motivo_cancelacion  String?          @db.VarChar(255)
   precio_total        Decimal          @db.Decimal(10, 2)
@@ -140,6 +142,15 @@ enum pedido_estado {
 enum pedido_pago {
   PENDIENTE
   PAGADO
+}
+
+enum pedido_medio_pago {
+  EFECTIVO
+  DEBITO
+  CREDITO
+  MERCADO_PAGO
+  TRANSFERENCIA
+  CUENTA_CORRIENTE
 }
 
 enum pedido_origen {

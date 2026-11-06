@@ -73,8 +73,8 @@ export class PedidosController {
     return this.pedidosService.cambiarEstado(id, cambiarEstadoPedidoDto);
   }
 
-  /** El admin marca el pedido como pagado o pendiente de pago. */
-  @Roles('ADMIN')
+  /** La barra (o el admin) marca el pedido como pagado o pendiente de pago. */
+  @Roles('ADMIN', 'BARRA')
   @Patch(':id/pago')
   cambiarPago(
     @Param('id', ParseIntPipe) id: number,

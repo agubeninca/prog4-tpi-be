@@ -54,7 +54,7 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | GET | `/pedidos/manuales?desde=&hasta=` | ADMIN, BARRA (registro de comandas manuales: horario, detalle y quién la cargó) |
 | GET | `/mesas/activas` | ADMIN, BARRA (mesas habilitadas, para la carga manual) |
 | PATCH | `/pedidos/:id/estado` | ADMIN, BARRA (COCINA solo visualiza el panel) |
-| PATCH | `/pedidos/:id/pago` | ADMIN (`{ "pagado": "PENDIENTE" \| "PAGADO" }`; un pedido cancelado no se puede marcar como pagado) |
+| PATCH | `/pedidos/:id/pago` | ADMIN, BARRA (`{ "pagado": "PENDIENTE" \| "PAGADO", "medio_pago"? }`; el medio es obligatorio al marcarlo pagado: EFECTIVO, DEBITO, CREDITO, MERCADO_PAGO, TRANSFERENCIA o CUENTA_CORRIENTE; un pedido cancelado no se puede marcar como pagado) |
 | CRUD | `/categorias`, `/productos`, `/mesas`, `/usuarios` | ADMIN |
 | GET | `/clientes?q=` · `/clientes/:dni` | ADMIN (listado con métricas · ficha con pedidos y reviews) |
 | PATCH | `/clientes/:dni` | ADMIN (corregir el nombre) |

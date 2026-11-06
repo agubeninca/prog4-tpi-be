@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -12,7 +13,7 @@ import { FiltroReviewsDto } from './dto/filtro-reviews.dto.js';
 export class ReviewsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** RF-09 / RB-05: la review pertenece a un pedido existente, y la deja quien lo hizo. */
+  /** RF-09 / RB-05: la review pertenece a un pedido existente, la deja quien lo hizo y es una sola por pedido. */
   async create(
     id_pedido: number,
     { dni, puntuacion, comentario }: CreateReviewDto,
@@ -27,6 +28,13 @@ export class ReviewsService {
       throw new ForbiddenException(
         'Solo quien hizo el pedido puede dejarle una review',
       );
+    }
+    const yaOpino = await this.prisma.review.findFirst({
+      where: { id_pedido },
+      select: { id_review: true },
+    });
+    if (yaOpino) {
+      throw new ConflictException('Ya dejaste tu opinión sobre este pedido');
     }
     return this.prisma.review.create({
       data: { id_pedido, puntuacion, comentario: comentario || null },

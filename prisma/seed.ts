@@ -13,6 +13,7 @@ import { CANTIDAD_MESAS, MENU_EJEMPLO } from './seed-data/menu.js';
 // - El personal se asegura siempre (sin un ADMIN no se puede entrar al panel).
 // - El menú y las mesas de ejemplo se cargan solo si la base no tiene ninguno (ni archivado):
 //   así no se vuelve a crear lo que el admin borró o editó.
+// - Las imágenes que falten en Storage se reparan siempre (ver repararImagenes).
 
 const PERSONAL = [
   {
@@ -212,6 +213,72 @@ async function seedMenu() {
   }
 }
 
+/**
+ * El emulador de Storage solo guarda los archivos si se cierra con un Ctrl+C (export-on-exit).
+ * Si se cerró la terminal, la base queda apuntando a imágenes que ya no existen y no se ven.
+ * Acá se revisa cada producto: a los del menú de ejemplo se les vuelve a generar la imagen;
+ * a los cargados desde el admin se les borra la referencia, para que muestren "sin imagen"
+ * y se pueda volver a subir.
+ */
+async function repararImagenes() {
+  if (!(await puertoAbierto(process.env.FIREBASE_STORAGE_EMULATOR_HOST))) {
+    return;
+  }
+  const bucket = getStorage(app).bucket();
+  const colorPorProducto = new Map(
+    MENU_EJEMPLO.flatMap(({ color, productos }) =>
+      productos.map((producto) => [producto.nombre, color] as const),
+    ),
+  );
+
+  const productos = await prisma.producto.findMany({
+    where: { archivado: false },
+    select: { id_producto: true, nombre: true, ruta_imagen: true },
+  });
+
+  let regeneradas = 0;
+  let perdidas = 0;
+  for (const producto of productos) {
+    if (producto.ruta_imagen) {
+      const [existe] = await bucket.file(producto.ruta_imagen).exists();
+      if (existe) continue;
+    }
+
+    const color = colorPorProducto.get(producto.nombre);
+    if (color) {
+      const ruta_imagen = `productos/producto-${producto.id_producto}.webp`;
+      await bucket
+        .file(ruta_imagen)
+        .save(await imagenDeEjemplo(producto.nombre, color), {
+          contentType: 'image/webp',
+        });
+      // También actualiza fecha_actualizacion: el navegador pide la imagen de nuevo.
+      await prisma.producto.update({
+        where: { id_producto: producto.id_producto },
+        data: { ruta_imagen },
+      });
+      regeneradas += 1;
+    } else if (producto.ruta_imagen) {
+      await prisma.producto.update({
+        where: { id_producto: producto.id_producto },
+        data: { ruta_imagen: null },
+      });
+      perdidas += 1;
+    }
+  }
+
+  if (regeneradas > 0) {
+    console.log(
+      `Imágenes: ✔ ${regeneradas} imágenes de ejemplo regeneradas (faltaban en Storage)`,
+    );
+  }
+  if (perdidas > 0) {
+    console.log(
+      `  ! ${perdidas} productos tenían una imagen que ya no está en Storage: quedaron sin imagen, volvé a subirla desde Admin → Productos.`,
+    );
+  }
+}
+
 async function seedMesas() {
   if ((await prisma.mesa.count()) > 0) {
     console.log('Mesas: ya hay mesas cargadas, no se agregan las de ejemplo.');
@@ -231,6 +298,7 @@ async function seedMesas() {
 async function main() {
   await seedPersonal();
   await seedMenu();
+  await repararImagenes();
   await seedMesas();
 }
 

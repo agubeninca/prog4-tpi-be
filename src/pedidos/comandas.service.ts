@@ -25,6 +25,7 @@ export class ComandasService {
         cliente: { dni: pedido.cliente.dni, nombre: pedido.cliente.nombre },
         estado: pedido.estado,
         pagado: pedido.pagado,
+        medio_pago: pedido.medio_pago,
         origen: pedido.origen,
         motivo_cancelacion: pedido.motivo_cancelacion,
         items: pedido.detalle_pedido.map((detalle) => ({

@@ -232,7 +232,7 @@ export class PedidosService {
   }
 
   /** El admin registra el cobro del pedido (o lo vuelve a pendiente si se equivocó). */
-  async cambiarPago(id: number, { pagado }: CambiarPagoPedidoDto) {
+  async cambiarPago(id: number, { pagado, medio_pago }: CambiarPagoPedidoDto) {
     const pedido = await this.prisma.pedido.findUnique({
       where: { id_pedido: id },
       include: INCLUDE_PEDIDO,
@@ -240,7 +240,9 @@ export class PedidosService {
     if (!pedido) {
       throw new NotFoundException(`Pedido #${id} no encontrado`);
     }
-    if (pedido.pagado === pagado) {
+    // Al volver a "pendiente" se borra el medio; pagado, se puede corregir el medio.
+    const medio = pagado === pedido_pago.PAGADO ? (medio_pago ?? null) : null;
+    if (pedido.pagado === pagado && pedido.medio_pago === medio) {
       return pedido;
     }
     if (
@@ -254,7 +256,7 @@ export class PedidosService {
 
     const actualizado = await this.prisma.pedido.update({
       where: { id_pedido: id },
-      data: { pagado },
+      data: { pagado, medio_pago: medio },
       include: INCLUDE_PEDIDO,
     });
 
