@@ -8,7 +8,10 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { pedido_estado, pedido_pago } from '../../../generated/prisma/client.js';
+import {
+  pedido_estado,
+  pedido_pago,
+} from '../../../generated/prisma/client.js';
 import { FECHA_MENSAJE, FECHA_REGEX, Trim } from '../../common/validaciones.js';
 
 export class FiltroPedidosDto {
@@ -33,7 +36,7 @@ export class FiltroPedidosDto {
   @Matches(FECHA_REGEX, { message: FECHA_MENSAJE })
   hasta?: string;
 
-  /** Busca por nombre o DNI del cliente (coincidencia parcial). */
+  /** Busca por nombre o DNI del cliente, o por nombre o CUIT de la cuenta (coincidencia parcial). */
   @Trim()
   @IsOptional()
   @MaxLength(100)

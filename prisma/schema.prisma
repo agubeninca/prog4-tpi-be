@@ -55,20 +55,26 @@ model mesa {
 }
 
 model pedido {
-  id_pedido           Int              @id @default(autoincrement())
+  id_pedido           Int                      @id @default(autoincrement())
   id_mesa             Int
-  dni_cliente         String           @db.VarChar(10)
-  fecha_hora_ingreso  DateTime         @default(now()) @db.DateTime(0)
-  estado              pedido_estado    @default(PENDIENTE)
-  pagado              pedido_pago      @default(PENDIENTE)
+  dni_cliente         String                   @db.VarChar(10)
+  fecha_hora_ingreso  DateTime                 @default(now()) @db.DateTime(0)
+  estado              pedido_estado            @default(PENDIENTE)
+  pagado              pedido_pago              @default(PENDIENTE)
   /// Con qué se pagó (solo registro, no hay pasarela de pago). Null mientras está pendiente.
   medio_pago          pedido_medio_pago?
-  origen              pedido_origen    @default(QR)
-  motivo_cancelacion  String?          @db.VarChar(255)
-  precio_total        Decimal          @db.Decimal(10, 2)
-  fecha_actualizacion DateTime         @default(now()) @updatedAt @db.DateTime(0)
-  mesa                mesa             @relation(fields: [id_mesa], references: [id_mesa], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mesa")
-  cliente             cliente          @relation(fields: [dni_cliente], references: [dni], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_cliente")
+  /// A quién se le cobró: consumidor final o una cuenta (nombre / razón social y CUIT). Null mientras está pendiente.
+  facturacion         pedido_facturacion?
+  /// Nombre o razón social de la cuenta (solo si facturacion = CUENTA).
+  cuenta_nombre       String?                  @db.VarChar(150)
+  /// CUIT de la cuenta, 11 dígitos sin guiones (opcional).
+  cuenta_cuit         String?                  @db.VarChar(11)
+  origen              pedido_origen            @default(QR)
+  motivo_cancelacion  String?                  @db.VarChar(255)
+  precio_total        Decimal                  @db.Decimal(10, 2)
+  fecha_actualizacion DateTime                 @default(now()) @updatedAt @db.DateTime(0)
+  mesa                mesa                     @relation(fields: [id_mesa], references: [id_mesa], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mesa")
+  cliente             cliente                  @relation(fields: [dni_cliente], references: [dni], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_cliente")
   detalle_pedido      detalle_pedido[]
   review              review[]
   registro_manual     registro_comanda_manual?
@@ -104,14 +110,14 @@ model review {
 }
 
 model usuario {
-  id_usuario          Int         @id @default(autoincrement())
-  firebase_uid        String      @unique(map: "uq_usuario_firebase_uid") @db.VarChar(128)
-  nombre_usuario      String      @unique(map: "uq_usuario_nombre_usuario") @db.VarChar(30)
-  nombre              String      @db.VarChar(100)
+  id_usuario          Int                       @id @default(autoincrement())
+  firebase_uid        String                    @unique(map: "uq_usuario_firebase_uid") @db.VarChar(128)
+  nombre_usuario      String                    @unique(map: "uq_usuario_nombre_usuario") @db.VarChar(30)
+  nombre              String                    @db.VarChar(100)
   rol                 usuario_rol
-  archivado           Boolean     @default(false)
-  fecha_creacion      DateTime    @default(now()) @db.DateTime(0)
-  fecha_actualizacion DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  archivado           Boolean                   @default(false)
+  fecha_creacion      DateTime                  @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime                  @default(now()) @updatedAt @db.DateTime(0)
   registro_manual     registro_comanda_manual[]
 }
 
@@ -151,6 +157,11 @@ enum pedido_medio_pago {
   MERCADO_PAGO
   TRANSFERENCIA
   CUENTA_CORRIENTE
+}
+
+enum pedido_facturacion {
+  CONSUMIDOR_FINAL
+  CUENTA
 }
 
 enum pedido_origen {

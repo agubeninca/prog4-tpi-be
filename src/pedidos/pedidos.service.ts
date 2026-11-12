@@ -7,6 +7,7 @@ import {
 import { Decimal } from 'decimal.js';
 import {
   pedido_estado,
+  pedido_facturacion,
   pedido_origen,
   pedido_pago,
   Prisma,
@@ -154,10 +155,14 @@ export class PedidosService {
         pagado,
         ...(Object.keys(fechas).length > 0 && { fecha_hora_ingreso: fechas }),
         ...(numero_mesa && { mesa: { numero_mesa } }),
+        // Por cliente (nombre o DNI) o por la cuenta a la que se le cobró (nombre o CUIT).
         ...(q && {
-          cliente: {
-            OR: [{ dni: { contains: q } }, { nombre: { contains: q } }],
-          },
+          OR: [
+            { cliente: { dni: { contains: q } } },
+            { cliente: { nombre: { contains: q } } },
+            { cuenta_nombre: { contains: q } },
+            { cuenta_cuit: { contains: q.replace(/[\s-]/g, '') || q } },
+          ],
         }),
       },
       orderBy: { fecha_hora_ingreso: 'desc' },
@@ -191,7 +196,7 @@ export class PedidosService {
       where: { id_pedido: id },
     });
     if (!pedido) {
-      throw new NotFoundException(`Pedido #${id} no encontrado`);
+      return this.pedidoInexistente(id);
     }
 
     if (!TRANSICIONES[pedido.estado].includes(estado)) {
@@ -231,24 +236,49 @@ export class PedidosService {
     return actualizado;
   }
 
-  /** El admin registra el cobro del pedido (o lo vuelve a pendiente si se equivocó). */
-  async cambiarPago(id: number, { pagado, medio_pago }: CambiarPagoPedidoDto) {
+  /**
+   * Registra el cobro del pedido: medio de pago y a quién se le cobró (consumidor final o una
+   * cuenta con nombre / razón social y CUIT). Pagado, se puede volver a llamar para corregir
+   * esos datos; al volverlo a "pendiente" se borran.
+   */
+  async cambiarPago(
+    id: number,
+    {
+      pagado,
+      medio_pago,
+      facturacion,
+      cuenta_nombre,
+      cuenta_cuit,
+    }: CambiarPagoPedidoDto,
+  ) {
     const pedido = await this.prisma.pedido.findUnique({
       where: { id_pedido: id },
       include: INCLUDE_PEDIDO,
     });
     if (!pedido) {
-      throw new NotFoundException(`Pedido #${id} no encontrado`);
+      return this.pedidoInexistente(id);
     }
-    // Al volver a "pendiente" se borra el medio; pagado, se puede corregir el medio.
-    const medio = pagado === pedido_pago.PAGADO ? (medio_pago ?? null) : null;
-    if (pedido.pagado === pagado && pedido.medio_pago === medio) {
+
+    const esPagado = pagado === pedido_pago.PAGADO;
+    const tipo = esPagado
+      ? (facturacion ?? pedido_facturacion.CONSUMIDOR_FINAL)
+      : null;
+    const esCuenta = tipo === pedido_facturacion.CUENTA;
+    const datos = {
+      pagado,
+      medio_pago: esPagado ? (medio_pago ?? null) : null,
+      facturacion: tipo,
+      cuenta_nombre: esCuenta ? (cuenta_nombre ?? null) : null,
+      cuenta_cuit: esCuenta ? (cuenta_cuit ?? null) : null,
+    };
+
+    const sinCambios = (Object.keys(datos) as (keyof typeof datos)[]).every(
+      (campo) => pedido[campo] === datos[campo],
+    );
+    if (sinCambios) {
       return pedido;
     }
-    if (
-      pagado === pedido_pago.PAGADO &&
-      pedido.estado === pedido_estado.CANCELADO
-    ) {
+    if (esPagado && pedido.estado === pedido_estado.CANCELADO) {
       throw new ConflictException(
         'No se puede marcar como pagado un pedido cancelado',
       );
@@ -256,7 +286,7 @@ export class PedidosService {
 
     const actualizado = await this.prisma.pedido.update({
       where: { id_pedido: id },
-      data: { pagado, medio_pago: medio },
+      data: datos,
       include: INCLUDE_PEDIDO,
     });
 
@@ -330,6 +360,16 @@ export class PedidosService {
       },
       include: INCLUDE_PEDIDO,
     });
+  }
+  /**
+   * El panel de comandas lee de Firestore: si ahí quedó la comanda de un pedido que ya no
+   * existe en la base (ej. se recreó la base), se la quita para que desaparezca del panel.
+   */
+  private async pedidoInexistente(id: number): Promise<never> {
+    await this.comandas.eliminar(id);
+    throw new NotFoundException(
+      `El pedido #${id} ya no existe en la base de datos. Se quitó del panel de comandas`,
+    );
   }
 }
 

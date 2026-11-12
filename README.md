@@ -49,12 +49,12 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | POST | `/pedidos` | Público |
 | GET | `/pedidos/:id?dni=` | Público (solo con el DNI del pedido) |
 | POST | `/pedidos/:id/reviews` | Público (solo con el DNI del pedido) |
-| GET | `/pedidos?estado=&pagado=&fecha=&desde=&hasta=&q=&numero_mesa=` | ADMIN, BARRA, COCINA (historial; hasta 500, más nuevos primero) |
+| GET | `/pedidos?estado=&pagado=&fecha=&desde=&hasta=&q=&numero_mesa=` | ADMIN, BARRA, COCINA (historial; hasta 500, más nuevos primero; `q` busca por nombre o DNI del cliente y por nombre o CUIT de la cuenta) |
 | POST | `/pedidos/manual` | ADMIN, BARRA (comanda cargada a mano: `id_mesa`, `dni`, `nombre?`, `items`, `observacion?`) |
 | GET | `/pedidos/manuales?desde=&hasta=` | ADMIN, BARRA (registro de comandas manuales: horario, detalle y quién la cargó) |
 | GET | `/mesas/activas` | ADMIN, BARRA (mesas habilitadas, para la carga manual) |
 | PATCH | `/pedidos/:id/estado` | ADMIN, BARRA (COCINA solo visualiza el panel) |
-| PATCH | `/pedidos/:id/pago` | ADMIN, BARRA (`{ "pagado": "PENDIENTE" \| "PAGADO", "medio_pago"? }`; el medio es obligatorio al marcarlo pagado: EFECTIVO, DEBITO, CREDITO, MERCADO_PAGO, TRANSFERENCIA o CUENTA_CORRIENTE; un pedido cancelado no se puede marcar como pagado) |
+| PATCH | `/pedidos/:id/pago` | ADMIN, BARRA (`{ "pagado": "PENDIENTE" \| "PAGADO", "medio_pago"?, "facturacion"?, "cuenta_nombre"?, "cuenta_cuit"? }`; el medio es obligatorio al marcarlo pagado: EFECTIVO, DEBITO, CREDITO, MERCADO_PAGO, TRANSFERENCIA o CUENTA_CORRIENTE. `facturacion`: CONSUMIDOR_FINAL (por defecto) o CUENTA; con CUENTA, `cuenta_nombre` (nombre o razón social) es obligatorio y `cuenta_cuit` opcional (11 dígitos, con o sin guiones). Pagado, se puede volver a llamar para corregir el cobro; al volverlo a pendiente se borran esos datos. Un pedido cancelado no se puede marcar como pagado) |
 | CRUD | `/categorias`, `/productos`, `/mesas`, `/usuarios` | ADMIN |
 | GET | `/clientes?q=` · `/clientes/:dni` | ADMIN (listado con métricas · ficha con pedidos y reviews) |
 | PATCH | `/clientes/:dni` | ADMIN (corregir el nombre) |
