@@ -15,6 +15,7 @@ import {
 import type { UsuarioAutenticado } from '../auth/auth.types.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { rangoDelDia } from '../common/fechas.js';
+import { mozosPorMesa } from '../mozos/mesas-atendidas.js';
 import { ComandasService } from './comandas.service.js';
 import { INCLUDE_PEDIDO, type PedidoCompleto } from './pedido.include.js';
 import { CreatePedidoDto } from './dto/create-pedido.dto.js';
@@ -73,14 +74,26 @@ export class PedidosService {
   }
 
   /**
-   * La Barra carga la comanda a mano (ej. clientes que no usan el QR).
+   * La Barra carga la comanda a mano (ej. clientes que no usan el QR), a nombre del mozo
+   * que atiende la mesa. La mesa queda tomada por ese mozo mientras tenga pedidos sin pagar
+   * ni cancelar: otro mozo no le puede cargar comandas.
    * Queda en el registro de comandas manuales: quién, cuándo y qué se cargó.
    */
   async createManual(
-    { id_mesa, dni, nombre, items, observacion }: CreatePedidoManualDto,
+    {
+      id_mesa,
+      id_mozo,
+      dni,
+      nombre,
+      items,
+      observacion,
+    }: CreatePedidoManualDto,
     usuario: UsuarioAutenticado,
   ) {
     const pedido = await this.prisma.$transaction(async (tx) => {
+      // Bloquea la fila de la mesa hasta terminar: si dos mozos cargan a la vez en la
+      // misma mesa libre, el segundo espera y ve que ya la tomó el primero.
+      await tx.$queryRaw`SELECT id_mesa FROM mesa WHERE id_mesa = ${id_mesa} FOR UPDATE`;
       const mesa = await tx.mesa.findFirst({
         where: { id_mesa, activa: true, archivado: false },
       });
@@ -90,8 +103,28 @@ export class PedidosService {
         );
       }
 
+      const mozo = await tx.mozo.findFirst({
+        where: { id_mozo, archivado: false },
+      });
+      if (!mozo) {
+        throw new BadRequestException('El mozo elegido no existe');
+      }
+      if (!mozo.activo) {
+        throw new BadRequestException(
+          `${mozo.nombre} está inactivo. Activalo desde la pestaña Mozos o elegí otro`,
+        );
+      }
+
+      const atiende = (await mozosPorMesa(tx, { id_mesa })).get(id_mesa);
+      if (atiende && atiende.id_mozo !== id_mozo) {
+        throw new ConflictException(
+          `La mesa ${mesa.numero_mesa} la está atendiendo ${atiende.nombre}. Se libera cuando sus pedidos estén pagados o cancelados`,
+        );
+      }
+
       const creado = await this.crearPedido(tx, {
         id_mesa,
+        id_mozo,
         dni,
         nombre,
         items,
@@ -297,7 +330,7 @@ export class PedidosService {
   /** Valida cliente y productos y crea el pedido (dentro de la transacción del llamador). */
   private async crearPedido(
     tx: Prisma.TransactionClient,
-    { id_mesa, dni, nombre, items, origen }: DatosPedido,
+    { id_mesa, id_mozo, dni, nombre, items, origen }: DatosPedido,
   ): Promise<PedidoCompleto> {
     // RB-04: el DNI + nombre generan el cliente. Si ya existe, el nombre no se pisa
     // (desde la mesa no se puede cambiar el de otro; lo corrige el admin).
@@ -353,6 +386,7 @@ export class PedidosService {
     return tx.pedido.create({
       data: {
         id_mesa,
+        id_mozo: id_mozo ?? null,
         dni_cliente: dni,
         precio_total,
         origen,
@@ -375,6 +409,8 @@ export class PedidosService {
 
 interface DatosPedido {
   id_mesa: number;
+  /** Solo en las comandas manuales. */
+  id_mozo?: number;
   dni: string;
   nombre?: string;
   items: { id_producto: number; cantidad: number }[];

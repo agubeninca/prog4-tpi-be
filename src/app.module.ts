@@ -9,6 +9,7 @@ import { UsuariosModule } from './usuarios/usuarios.module.js';
 import { CategoriasModule } from './categorias/categorias.module.js';
 import { ProductosModule } from './productos/productos.module.js';
 import { MesasModule } from './mesas/mesas.module.js';
+import { MozosModule } from './mozos/mozos.module.js';
 import { MenuModule } from './menu/menu.module.js';
 import { ClientesModule } from './clientes/clientes.module.js';
 import { PedidosModule } from './pedidos/pedidos.module.js';
@@ -25,6 +26,7 @@ import { ReportesModule } from './reportes/reportes.module.js';
     CategoriasModule,
     ProductosModule,
     MesasModule,
+    MozosModule,
     MenuModule,
     ClientesModule,
     PedidosModule,

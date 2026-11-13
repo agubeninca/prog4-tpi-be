@@ -38,6 +38,8 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 
 **Roles:** ADMIN accede a todo. BARRA usa el panel de comandas, cambia los estados (tomar, servido, cancelar) y puede cargar comandas a mano para clientes que no usan el QR (quedan en el registro de comandas manuales). COCINA ve el mismo panel en tiempo real pero solo lectura, para saber qué preparar.
 
+**Mozos:** no inician sesión. Al cargar una comanda a mano se elige el mozo que atiende la mesa, y la mesa queda a su nombre hasta que todos sus pedidos estén pagados o cancelados (mientras tanto, otro mozo no puede cargarle comandas). El seed precarga 4 de ejemplo (Juan, María, Lucas y Sofía), que se editan desde la pestaña **Mozos** del panel de Admin.
+
 ## Endpoints
 
 | Método | Ruta | Acceso |
@@ -50,9 +52,11 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | GET | `/pedidos/:id?dni=` | Público (solo con el DNI del pedido) |
 | POST | `/pedidos/:id/reviews` | Público (solo con el DNI del pedido) |
 | GET | `/pedidos?estado=&pagado=&fecha=&desde=&hasta=&q=&numero_mesa=` | ADMIN, BARRA, COCINA (historial; hasta 500, más nuevos primero; `q` busca por nombre o DNI del cliente y por nombre o CUIT de la cuenta) |
-| POST | `/pedidos/manual` | ADMIN, BARRA (comanda cargada a mano: `id_mesa`, `dni`, `nombre?`, `items`, `observacion?`) |
+| POST | `/pedidos/manual` | ADMIN, BARRA (comanda cargada a mano: `id_mesa`, `id_mozo`, `dni`, `nombre?`, `items`, `observacion?`. La mesa queda a nombre de ese mozo mientras tenga pedidos sin pagar ni cancelar: si la atiende otro mozo, responde 409) |
 | GET | `/pedidos/manuales?desde=&hasta=` | ADMIN, BARRA (registro de comandas manuales: horario, detalle y quién la cargó) |
-| GET | `/mesas/activas` | ADMIN, BARRA (mesas habilitadas, para la carga manual) |
+| GET | `/mesas/activas` | ADMIN, BARRA (mesas habilitadas, para la carga manual, con el `mozo` que las atiende o `null` si están libres) |
+| GET | `/mozos` | ADMIN, BARRA (mozos activos e inactivos, con `mesas_atendiendo`) |
+| POST / PATCH / DELETE | `/mozos`, `/mozos/:id` | ADMIN (`nombre`, `activo?`; no se puede desactivar ni eliminar un mozo que está atendiendo mesas) |
 | PATCH | `/pedidos/:id/estado` | ADMIN, BARRA (COCINA solo visualiza el panel) |
 | PATCH | `/pedidos/:id/pago` | ADMIN, BARRA (`{ "pagado": "PENDIENTE" \| "PAGADO", "medio_pago"?, "facturacion"?, "cuenta_nombre"?, "cuenta_cuit"? }`; el medio es obligatorio al marcarlo pagado: EFECTIVO, DEBITO, CREDITO, MERCADO_PAGO, TRANSFERENCIA o CUENTA_CORRIENTE. `facturacion`: CONSUMIDOR_FINAL (por defecto) o CUENTA; con CUENTA, `cuenta_nombre` (nombre o razón social) es obligatorio y `cuenta_cuit` opcional (11 dígitos, con o sin guiones). Pagado, se puede volver a llamar para corregir el cobro; al volverlo a pendiente se borran esos datos. Un pedido cancelado no se puede marcar como pagado) |
 | CRUD | `/categorias`, `/productos`, `/mesas`, `/usuarios` | ADMIN |

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
+import { mozosPorMesa } from '../mozos/mesas-atendidas.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateMesaDto } from './dto/create-mesa.dto.js';
 import { UpdateMesaDto } from './dto/update-mesa.dto.js';
@@ -41,11 +42,22 @@ export class MesasService {
     });
   }
 
-  findActivas() {
-    return this.prisma.mesa.findMany({
-      where: { activa: true, archivado: false },
-      orderBy: { numero_mesa: 'asc' },
-      select: { id_mesa: true, numero_mesa: true },
+  /** Mesas habilitadas, con el mozo que las atiende ahora (null si están libres). */
+  async findActivas() {
+    const [mesas, atendidas] = await Promise.all([
+      this.prisma.mesa.findMany({
+        where: { activa: true, archivado: false },
+        orderBy: { numero_mesa: 'asc' },
+        select: { id_mesa: true, numero_mesa: true },
+      }),
+      mozosPorMesa(this.prisma),
+    ]);
+    return mesas.map((mesa) => {
+      const mozo = atendidas.get(mesa.id_mesa);
+      return {
+        ...mesa,
+        mozo: mozo ? { id_mozo: mozo.id_mozo, nombre: mozo.nombre } : null,
+      };
     });
   }
 

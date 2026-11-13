@@ -7,11 +7,15 @@ import { getStorage } from 'firebase-admin/storage';
 import sharp from 'sharp';
 import { PrismaClient, usuario_rol } from '../generated/prisma/client.js';
 import { emailInterno } from '../src/usuarios/cuenta-firebase.js';
-import { CANTIDAD_MESAS, MENU_EJEMPLO } from './seed-data/menu.js';
+import {
+  CANTIDAD_MESAS,
+  MENU_EJEMPLO,
+  MOZOS_EJEMPLO,
+} from './seed-data/menu.js';
 
 // Seed idempotente: se puede correr en cada `npm start` sin duplicar datos.
 // - El personal se asegura siempre (sin un ADMIN no se puede entrar al panel).
-// - El menú y las mesas de ejemplo se cargan solo si la base no tiene ninguno (ni archivado):
+// - El menú, las mesas y los mozos de ejemplo se cargan solo si la base no tiene ninguno (ni archivado):
 //   así no se vuelve a crear lo que el admin borró o editó.
 // - Las imágenes que falten en Storage se reparan siempre (ver repararImagenes).
 
@@ -295,11 +299,23 @@ async function seedMesas() {
   );
 }
 
+async function seedMozos() {
+  if ((await prisma.mozo.count()) > 0) {
+    console.log('Mozos: ya hay mozos cargados, no se agregan los de ejemplo.');
+    return;
+  }
+  await prisma.mozo.createMany({
+    data: MOZOS_EJEMPLO.map((nombre) => ({ nombre })),
+  });
+  console.log(`Mozos: ✔ ${MOZOS_EJEMPLO.join(', ')}`);
+}
+
 async function main() {
   await seedPersonal();
   await seedMenu();
   await repararImagenes();
   await seedMesas();
+  await seedMozos();
 }
 
 main()

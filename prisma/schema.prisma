@@ -70,6 +70,8 @@ model pedido {
   /// CUIT de la cuenta, 11 dígitos sin guiones (opcional).
   cuenta_cuit         String?                  @db.VarChar(11)
   origen              pedido_origen            @default(QR)
+  /// Mozo que atiende la mesa (solo en comandas cargadas a mano; null en las del QR).
+  id_mozo             Int?
   motivo_cancelacion  String?                  @db.VarChar(255)
   precio_total        Decimal                  @db.Decimal(10, 2)
   fecha_actualizacion DateTime                 @default(now()) @updatedAt @db.DateTime(0)
@@ -78,8 +80,10 @@ model pedido {
   detalle_pedido      detalle_pedido[]
   review              review[]
   registro_manual     registro_comanda_manual?
+  mozo                mozo?                    @relation(fields: [id_mozo], references: [id_mozo], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mozo")
 
   @@index([id_mesa], map: "fk_pedido_mesa")
+  @@index([id_mozo], map: "fk_pedido_mozo")
   @@index([dni_cliente], map: "fk_pedido_cliente")
   @@index([estado, fecha_hora_ingreso], map: "idx_pedido_estado_fecha")
 }
@@ -122,6 +126,19 @@ model usuario {
 }
 
 /// Registro de las comandas que el personal de Barra carga a mano (clientes que no usan el QR).
+/// Mozos del salón: se eligen al cargar una comanda a mano. No inician sesión.
+/// Una mesa queda "tomada" por el mozo mientras tenga pedidos suyos sin pagar ni cancelar.
+model mozo {
+  id_mozo             Int      @id @default(autoincrement())
+  nombre              String   @unique(map: "uq_mozo_nombre") @db.VarChar(100)
+  /// Inactivo: no aparece para elegir en la comanda (ej. de vacaciones), pero se conserva.
+  activo              Boolean  @default(true)
+  archivado           Boolean  @default(false)
+  fecha_creacion      DateTime @default(now()) @db.DateTime(0)
+  fecha_actualizacion DateTime @default(now()) @updatedAt @db.DateTime(0)
+  pedido              pedido[]
+}
+
 model registro_comanda_manual {
   id_registro Int      @id @default(autoincrement())
   id_pedido   Int      @unique(map: "uq_registro_manual_pedido")

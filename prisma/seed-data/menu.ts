@@ -147,3 +147,6 @@ export const MENU_EJEMPLO: CategoriaEjemplo[] = [
 ];
 
 export const CANTIDAD_MESAS = 6;
+
+/** Mozos de ejemplo: se cambian desde la pestaña "Mozos" del panel. */
+export const MOZOS_EJEMPLO = ['Juan', 'María', 'Lucas', 'Sofía'];

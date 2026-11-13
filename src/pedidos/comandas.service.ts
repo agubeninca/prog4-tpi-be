@@ -116,6 +116,7 @@ export class ComandasService implements OnApplicationBootstrap {
       id_pedido: pedido.id_pedido,
       numero_mesa: pedido.mesa.numero_mesa,
       cliente: { dni: pedido.cliente.dni, nombre: pedido.cliente.nombre },
+      mozo: pedido.mozo?.nombre ?? null,
       estado: pedido.estado,
       pagado: pedido.pagado,
       medio_pago: pedido.medio_pago,
