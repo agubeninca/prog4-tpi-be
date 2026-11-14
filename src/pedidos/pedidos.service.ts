@@ -6,6 +6,17 @@ import {
 } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import {
+  filter,
+  interval,
+  map,
+  merge,
+  of,
+  share,
+  takeUntil,
+  takeWhile,
+} from 'rxjs';
+import type { Observable } from 'rxjs';
+import {
   pedido_estado,
   pedido_facturacion,
   pedido_origen,
@@ -17,6 +28,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { rangoDelDia } from '../common/fechas.js';
 import { mozosPorMesa } from '../mozos/mesas-atendidas.js';
 import { ComandasService } from './comandas.service.js';
+import { PedidosEventosService } from './pedidos-eventos.service.js';
+import { registrarCambioEstado } from './historial-estado.js';
 import { INCLUDE_PEDIDO, type PedidoCompleto } from './pedido.include.js';
 import { CreatePedidoDto } from './dto/create-pedido.dto.js';
 import { CreatePedidoManualDto } from './dto/create-pedido-manual.dto.js';
@@ -25,10 +38,17 @@ import { CambiarEstadoPedidoDto } from './dto/cambiar-estado-pedido.dto.js';
 import { CambiarPagoPedidoDto } from './dto/cambiar-pago-pedido.dto.js';
 import { FiltroPedidosDto } from './dto/filtro-pedidos.dto.js';
 
-/** RF-06: el pedido avanza de a un paso; CANCELADO es posible mientras no esté terminado. */
+/**
+ * RF-06: el pedido avanza de a un paso; CANCELADO es posible mientras no esté terminado.
+ * Un pedido "En preparación" puede volver a "Pendiente" (la Barra lo tomó por error).
+ */
 const TRANSICIONES: Record<pedido_estado, pedido_estado[]> = {
   PENDIENTE: [pedido_estado.EN_PREPARACION, pedido_estado.CANCELADO],
-  EN_PREPARACION: [pedido_estado.SERVIDO, pedido_estado.CANCELADO],
+  EN_PREPARACION: [
+    pedido_estado.SERVIDO,
+    pedido_estado.PENDIENTE,
+    pedido_estado.CANCELADO,
+  ],
   SERVIDO: [],
   CANCELADO: [],
 };
@@ -45,6 +65,7 @@ export class PedidosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly comandas: ComandasService,
+    private readonly eventos: PedidosEventosService,
   ) {}
 
   /** RF-04: el cliente confirma su comanda desde la mesa (QR). */
@@ -129,6 +150,7 @@ export class PedidosService {
         nombre,
         items,
         origen: pedido_origen.MANUAL,
+        id_usuario: usuario.id_usuario,
       });
 
       await tx.registro_comanda_manual.create({
@@ -221,9 +243,94 @@ export class PedidosService {
     return pedido;
   }
 
+  /** Quién y cuándo cambió el estado del pedido (incluye el alta y los "volver atrás"). */
+  async findHistorial(id: number) {
+    const pedido = await this.prisma.pedido.findUnique({
+      where: { id_pedido: id },
+      select: { id_pedido: true },
+    });
+    if (!pedido) {
+      throw new NotFoundException(`Pedido #${id} no encontrado`);
+    }
+    return this.prisma.historial_estado_pedido.findMany({
+      where: { id_pedido: id },
+      orderBy: [{ fecha_hora: 'asc' }, { id_historial: 'asc' }],
+      include: {
+        usuario: {
+          select: { id_usuario: true, nombre: true, nombre_usuario: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * Últimos pedidos de un cliente, para "pedir de nuevo". Público: se identifica con el DNI
+   * (igual que GET /pedidos/:id) y devuelve solo lo consumido, sin el nombre del cliente.
+   */
+  findRecientesDelCliente(dni: string) {
+    return this.prisma.pedido.findMany({
+      where: { dni_cliente: dni, estado: { not: pedido_estado.CANCELADO } },
+      orderBy: { fecha_hora_ingreso: 'desc' },
+      take: 10,
+      select: {
+        id_pedido: true,
+        fecha_hora_ingreso: true,
+        estado: true,
+        precio_total: true,
+        mesa: { select: { numero_mesa: true } },
+        detalle_pedido: {
+          select: {
+            cantidad: true,
+            producto: { select: { id_producto: true, nombre: true } },
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Eventos en vivo del pedido (SSE): primero el estado actual y después cada cambio.
+   * Se cierra solo cuando el pedido termina (servido o cancelado). Cada 25 s manda un "ping"
+   * para que ningún proxy corte la conexión por inactividad.
+   */
+  async eventosDelPedido(
+    id: number,
+    dni: string,
+  ): Promise<Observable<{ type: string; data: object }>> {
+    const actual = await this.findOneParaCliente(id, dni);
+    const esFinal = (estado: pedido_estado) =>
+      estado === pedido_estado.SERVIDO || estado === pedido_estado.CANCELADO;
+    const evento = (estado: pedido_estado, motivo: string | null) => ({
+      type: 'estado',
+      data: { estado, motivo_cancelacion: motivo },
+    });
+
+    // Ya terminado: se informa el estado y se cierra.
+    if (esFinal(actual.estado)) {
+      return of(evento(actual.estado, actual.motivo_cancelacion));
+    }
+
+    const cambios$ = this.eventos.eventos$.pipe(
+      filter((e) => e.id_pedido === id),
+      takeWhile((e) => !esFinal(e.estado), true),
+      share(),
+    );
+    const termino$ = cambios$.pipe(filter((e) => esFinal(e.estado)));
+
+    return merge(
+      of(evento(actual.estado, actual.motivo_cancelacion)),
+      cambios$.pipe(map((e) => evento(e.estado, e.motivo_cancelacion))),
+      interval(25_000).pipe(
+        map(() => ({ type: 'ping', data: {} })),
+        takeUntil(termino$),
+      ),
+    );
+  }
+
   async cambiarEstado(
     id: number,
     { estado, motivo_cancelacion }: CambiarEstadoPedidoDto,
+    usuario: UsuarioAutenticado,
   ) {
     const pedido = await this.prisma.pedido.findUnique({
       where: { id_pedido: id },
@@ -243,15 +350,26 @@ export class PedidosService {
 
     let actualizado: PedidoCompleto;
     try {
-      // El filtro por estado evita pisar un cambio hecho al mismo tiempo desde otro puesto.
-      actualizado = await this.prisma.pedido.update({
-        where: { id_pedido: id, estado: pedido.estado },
-        data: {
-          estado,
-          motivo_cancelacion:
+      actualizado = await this.prisma.$transaction(async (tx) => {
+        // El filtro por estado evita pisar un cambio hecho al mismo tiempo desde otro puesto.
+        const resultado = await tx.pedido.update({
+          where: { id_pedido: id, estado: pedido.estado },
+          data: {
+            estado,
+            motivo_cancelacion:
+              estado === pedido_estado.CANCELADO ? motivo_cancelacion : null,
+          },
+          include: INCLUDE_PEDIDO,
+        });
+        await registrarCambioEstado(tx, {
+          id_pedido: id,
+          anterior: pedido.estado,
+          nuevo: estado,
+          id_usuario: usuario.id_usuario,
+          motivo:
             estado === pedido_estado.CANCELADO ? motivo_cancelacion : null,
-        },
-        include: INCLUDE_PEDIDO,
+        });
+        return resultado;
       });
     } catch (error) {
       if (
@@ -317,9 +435,11 @@ export class PedidosService {
       );
     }
 
+    // Fecha de cobro (cierre de caja): se fija al pasar a pagado y se conserva si solo se corrigen los datos.
+    const fecha_pago = esPagado ? (pedido.fecha_pago ?? new Date()) : null;
     const actualizado = await this.prisma.pedido.update({
       where: { id_pedido: id },
-      data: datos,
+      data: { ...datos, fecha_pago },
       include: INCLUDE_PEDIDO,
     });
 
@@ -330,7 +450,7 @@ export class PedidosService {
   /** Valida cliente y productos y crea el pedido (dentro de la transacción del llamador). */
   private async crearPedido(
     tx: Prisma.TransactionClient,
-    { id_mesa, id_mozo, dni, nombre, items, origen }: DatosPedido,
+    { id_mesa, id_mozo, dni, nombre, items, origen, id_usuario }: DatosPedido,
   ): Promise<PedidoCompleto> {
     // RB-04: el DNI + nombre generan el cliente. Si ya existe, el nombre no se pisa
     // (desde la mesa no se puede cambiar el de otro; lo corrige el admin).
@@ -383,7 +503,7 @@ export class PedidosService {
       .reduce((total, linea) => total.plus(linea.subtotal), new Decimal(0))
       .toFixed(2);
 
-    return tx.pedido.create({
+    const creado = await tx.pedido.create({
       data: {
         id_mesa,
         id_mozo: id_mozo ?? null,
@@ -394,6 +514,13 @@ export class PedidosService {
       },
       include: INCLUDE_PEDIDO,
     });
+    await registrarCambioEstado(tx, {
+      id_pedido: creado.id_pedido,
+      anterior: null,
+      nuevo: creado.estado,
+      id_usuario,
+    });
+    return creado;
   }
   /**
    * El panel de comandas lee de Firestore: si ahí quedó la comanda de un pedido que ya no
@@ -415,6 +542,8 @@ interface DatosPedido {
   nombre?: string;
   items: { id_producto: number; cantidad: number }[];
   origen: pedido_origen;
+  /** Quien carga la comanda a mano; null si la hizo el cliente por QR. */
+  id_usuario?: number;
 }
 
 /** "2 × Café con leche, 1 × Medialuna": copia legible de la comanda para el registro. */

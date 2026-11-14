@@ -28,6 +28,8 @@ export class ProductosService {
       data: {
         ...createProductoDto,
         precio: new Decimal(createProductoDto.precio).toFixed(2),
+        // El nuevo producto va al final de su categoría.
+        orden: await this.siguienteOrden(createProductoDto.id_categoria),
       },
       include: INCLUDE_CATEGORIA,
     });
@@ -36,7 +38,11 @@ export class ProductosService {
   findAll({ id_categoria }: FiltroProductosDto) {
     return this.prisma.producto.findMany({
       where: { archivado: false, id_categoria },
-      orderBy: [{ categoria: { nombre: 'asc' } }, { nombre: 'asc' }],
+      orderBy: [
+        { categoria: { orden: 'asc' } },
+        { orden: 'asc' },
+        { nombre: 'asc' },
+      ],
       include: INCLUDE_CATEGORIA,
     });
   }
@@ -58,10 +64,17 @@ export class ProductosService {
       await this.validarCategoria(updateProductoDto.id_categoria);
     }
     const { precio, ...resto } = updateProductoDto;
+    const actual = await this.findOne(id);
+    const cambiaDeCategoria =
+      resto.id_categoria !== undefined &&
+      resto.id_categoria !== actual.id_categoria;
     return this.prisma.producto.update({
       where: { id_producto: id },
       data: {
         ...resto,
+        ...(cambiaDeCategoria && {
+          orden: await this.siguienteOrden(resto.id_categoria!),
+        }),
         ...(precio !== undefined && { precio: new Decimal(precio).toFixed(2) }),
       },
       include: INCLUDE_CATEGORIA,
@@ -109,6 +122,57 @@ export class ProductosService {
       data: { ruta_imagen },
       include: INCLUDE_CATEGORIA,
     });
+  }
+
+  /** Quita la imagen del producto: borra el archivo de Storage y deja el producto sin imagen. */
+  async eliminarImagen(id: number) {
+    const producto = await this.findOne(id);
+    if (producto.ruta_imagen) {
+      await this.firebase
+        .bucket()
+        .file(producto.ruta_imagen)
+        .delete({ ignoreNotFound: true });
+    }
+    return this.prisma.producto.update({
+      where: { id_producto: id },
+      data: { ruta_imagen: null },
+      include: INCLUDE_CATEGORIA,
+    });
+  }
+
+  private async siguienteOrden(id_categoria: number) {
+    const { _max } = await this.prisma.producto.aggregate({
+      where: { id_categoria, archivado: false },
+      _max: { orden: true },
+    });
+    return (_max.orden ?? 0) + 1;
+  }
+
+  /** Orden de los productos de una categoría: el primer id queda en la posición 1. */
+  async ordenar(id_categoria: number, ids: number[]) {
+    await this.validarCategoria(id_categoria);
+    const productos = await this.prisma.producto.findMany({
+      where: { id_categoria, archivado: false },
+      select: { id_producto: true },
+    });
+    const existentes = new Set(productos.map((p) => p.id_producto));
+    if (
+      ids.length !== existentes.size ||
+      !ids.every((id) => existentes.has(id))
+    ) {
+      throw new BadRequestException(
+        'La lista tiene que incluir todos los productos de la categoría, sin repetir ni agregar otros',
+      );
+    }
+    await this.prisma.$transaction(
+      ids.map((id_producto, indice) =>
+        this.prisma.producto.update({
+          where: { id_producto },
+          data: { orden: indice + 1 },
+        }),
+      ),
+    );
+    return this.findAll({ id_categoria });
   }
 
   private async validarCategoria(id_categoria: number) {

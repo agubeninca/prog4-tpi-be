@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { FirebaseService } from '../firebase/firebase.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { INCLUDE_PEDIDO, type PedidoCompleto } from './pedido.include.js';
+import { PedidosEventosService } from './pedidos-eventos.service.js';
 
 export const COLECCION_COMANDAS = 'pedidos_activos';
 const TIMEOUT_FIRESTORE_MS = 3000;
@@ -19,6 +20,7 @@ export class ComandasService implements OnApplicationBootstrap {
   constructor(
     private readonly firebase: FirebaseService,
     private readonly prisma: PrismaService,
+    private readonly eventos: PedidosEventosService,
   ) {}
 
   private get coleccion() {
@@ -86,6 +88,12 @@ export class ComandasService implements OnApplicationBootstrap {
   }
 
   async sincronizar(pedido: PedidoCompleto) {
+    // Se avisa al cliente (SSE) antes de esperar a Firestore: no depende de que el emulador responda.
+    this.eventos.emitir({
+      id_pedido: pedido.id_pedido,
+      estado: pedido.estado,
+      motivo_cancelacion: pedido.motivo_cancelacion,
+    });
     const escritura = this.coleccion
       .doc(String(pedido.id_pedido))
       .set(this.aDocumento(pedido));

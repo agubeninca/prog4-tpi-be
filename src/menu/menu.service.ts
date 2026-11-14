@@ -9,14 +9,14 @@ export class MenuService {
   async obtenerMenu() {
     const categorias = await this.prisma.categoria.findMany({
       where: { archivado: false },
-      orderBy: { nombre: 'asc' },
+      orderBy: [{ orden: 'asc' }, { nombre: 'asc' }],
       select: {
         id_categoria: true,
         nombre: true,
         descripcion: true,
         producto: {
           where: { archivado: false, estado_pausado: false },
-          orderBy: { nombre: 'asc' },
+          orderBy: [{ orden: 'asc' }, { nombre: 'asc' }],
           select: {
             id_producto: true,
             nombre: true,

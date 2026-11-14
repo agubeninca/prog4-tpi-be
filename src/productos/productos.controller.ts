@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseInterceptors,
@@ -20,6 +21,7 @@ import { CreateProductoDto } from './dto/create-producto.dto.js';
 import { UpdateProductoDto } from './dto/update-producto.dto.js';
 import { PausaProductoDto } from './dto/pausa-producto.dto.js';
 import { FiltroProductosDto } from './dto/filtro-productos.dto.js';
+import { OrdenProductosDto } from './dto/orden-productos.dto.js';
 
 @Controller('productos')
 @Roles('ADMIN')
@@ -34,6 +36,12 @@ export class ProductosController {
   @Get()
   findAll(@Query() filtro: FiltroProductosDto) {
     return this.productosService.findAll(filtro);
+  }
+
+  /** Orden de los productos dentro de una categoría. */
+  @Put('orden')
+  ordenar(@Body() { id_categoria, ids }: OrdenProductosDto) {
+    return this.productosService.ordenar(id_categoria, ids);
   }
 
   @Get(':id')
@@ -75,5 +83,10 @@ export class ProductosController {
     imagen: Express.Multer.File,
   ) {
     return this.productosService.actualizarImagen(id, imagen.buffer);
+  }
+
+  @Delete(':id/imagen')
+  eliminarImagen(@Param('id', ParseIntPipe) id: number) {
+    return this.productosService.eliminarImagen(id);
   }
 }

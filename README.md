@@ -57,15 +57,21 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | GET | `/mesas/activas` | ADMIN, BARRA (mesas habilitadas, para la carga manual, con el `mozo` que las atiende o `null` si están libres) |
 | GET | `/mozos` | ADMIN, BARRA (mozos activos e inactivos, con `mesas_atendiendo`) |
 | POST / PATCH / DELETE | `/mozos`, `/mozos/:id` | ADMIN (`nombre`, `activo?`; no se puede desactivar ni eliminar un mozo que está atendiendo mesas) |
-| PATCH | `/pedidos/:id/estado` | ADMIN, BARRA (COCINA solo visualiza el panel) |
+| GET | `/pedidos/mios?dni=` | Público (solo con el DNI: los últimos 10 pedidos no cancelados del cliente, para "Mis pedidos" / "Pedir de nuevo") |
+| GET (SSE) | `/pedidos/:id/eventos?dni=` | Público (solo con el DNI del pedido; Server-Sent Events: el cliente se entera al instante de cada cambio de estado; se cierra solo al llegar a SERVIDO o CANCELADO) |
+| GET | `/pedidos/:id/historial` | ADMIN, BARRA (quién cambió cada estado y cuándo; el alta por QR figura sin usuario) |
+| PATCH | `/pedidos/:id/estado` | ADMIN, BARRA (COCINA solo visualiza el panel). Transiciones: PENDIENTE → EN_PREPARACION o CANCELADO; EN_PREPARACION → SERVIDO, CANCELADO o **PENDIENTE** (volver atrás un pedido pasado por error); SERVIDO y CANCELADO son finales |
 | PATCH | `/pedidos/:id/pago` | ADMIN, BARRA (`{ "pagado": "PENDIENTE" \| "PAGADO", "medio_pago"?, "facturacion"?, "cuenta_nombre"?, "cuenta_cuit"? }`; el medio es obligatorio al marcarlo pagado: EFECTIVO, DEBITO, CREDITO, MERCADO_PAGO, TRANSFERENCIA o CUENTA_CORRIENTE. `facturacion`: CONSUMIDOR_FINAL (por defecto) o CUENTA; con CUENTA, `cuenta_nombre` (nombre o razón social) es obligatorio y `cuenta_cuit` opcional (11 dígitos, con o sin guiones). Pagado, se puede volver a llamar para corregir el cobro; al volverlo a pendiente se borran esos datos. Un pedido cancelado no se puede marcar como pagado) |
 | CRUD | `/categorias`, `/productos`, `/mesas`, `/usuarios` | ADMIN |
 | GET | `/clientes?q=` · `/clientes/:dni` | ADMIN (listado con métricas · ficha con pedidos y reviews) |
 | PATCH | `/clientes/:dni` | ADMIN (corregir el nombre) |
 | DELETE | `/clientes/:dni` | ADMIN (solo clientes sin pedidos; con pedidos → 409) |
-| PATCH | `/productos/:id/pausa` · POST `/productos/:id/imagen` | ADMIN |
+| PATCH | `/productos/:id/pausa` · POST `/productos/:id/imagen` · DELETE `/productos/:id/imagen` | ADMIN (el DELETE deja el producto sin imagen) |
+| PUT | `/categorias/orden` · `/productos/orden` | ADMIN (orden del menú: `{ "ids": [...] }` con TODAS las categorías; `{ "id_categoria", "ids": [...] }` con TODOS los productos de esa categoría) |
 | POST | `/mesas/:id/regenerar-qr` | ADMIN |
 | GET | `/reviews?desde=&hasta=&dni=` · `/reportes/ventas-dia?fecha=` | ADMIN |
+| GET | `/reportes/cierre-caja?fecha=` | ADMIN, BARRA (cobrado del día por medio de pago —por la fecha en que se cobró—, efectivo que debe haber en la caja, facturado a cuentas, servidos sin cobrar de cualquier día, en curso y cancelados) |
+| GET | `/reportes/estadisticas?dias=7\|30\|90` | ADMIN (ventas por día y por hora, top 10 de productos y ventas por mozo; cuenta solo pedidos servidos) |
 | DELETE | `/reviews/:id` | ADMIN (borrado definitivo de una review) |
 | POST | `/errores` | Público (el frontend reporta sus errores; se guardan en Firestore) |
 | GET · DELETE | `/errores?tipo=&limite=` | ADMIN (listar / vaciar el log de errores) |

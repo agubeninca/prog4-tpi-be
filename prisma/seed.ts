@@ -176,11 +176,14 @@ async function seedMenu() {
   let cantidadProductos = 0;
   let pausados = 0;
 
-  for (const { nombre, descripcion, color, productos } of MENU_EJEMPLO) {
+  for (const [
+    posicionCategoria,
+    { nombre, descripcion, color, productos },
+  ] of MENU_EJEMPLO.entries()) {
     const categoria = await prisma.categoria.create({
-      data: { nombre, descripcion },
+      data: { nombre, descripcion, orden: posicionCategoria + 1 },
     });
-    for (const producto of productos) {
+    for (const [posicion, producto] of productos.entries()) {
       const creado = await prisma.producto.create({
         data: {
           id_categoria: categoria.id_categoria,
@@ -188,6 +191,7 @@ async function seedMenu() {
           descripcion: producto.descripcion,
           precio: producto.precio.toFixed(2),
           estado_pausado: producto.pausado ?? false,
+          orden: posicion + 1,
         },
       });
       if (bucket) {

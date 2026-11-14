@@ -20,6 +20,8 @@ model categoria {
   id_categoria        Int        @id @default(autoincrement())
   nombre              String     @db.VarChar(100)
   descripcion         String?    @db.VarChar(255)
+  /// Posición en el menú (1 = primera). Se elige desde el admin.
+  orden               Int        @default(0)
   archivado           Boolean    @default(false)
   fecha_creacion      DateTime   @default(now()) @db.DateTime(0)
   fecha_actualizacion DateTime   @default(now()) @updatedAt @db.DateTime(0)
@@ -34,6 +36,8 @@ model producto {
   precio              Decimal          @db.Decimal(10, 2)
   estado_pausado      Boolean          @default(false)
   ruta_imagen         String?          @db.VarChar(255)
+  /// Posición dentro de su categoría (1 = primero).
+  orden               Int              @default(0)
   archivado           Boolean          @default(false)
   fecha_creacion      DateTime         @default(now()) @db.DateTime(0)
   fecha_actualizacion DateTime         @default(now()) @updatedAt @db.DateTime(0)
@@ -61,6 +65,8 @@ model pedido {
   fecha_hora_ingreso  DateTime                 @default(now()) @db.DateTime(0)
   estado              pedido_estado            @default(PENDIENTE)
   pagado              pedido_pago              @default(PENDIENTE)
+  /// Cuándo se cobró (null mientras está pendiente). Es la fecha que usa el cierre de caja.
+  fecha_pago          DateTime?                @db.DateTime(0)
   /// Con qué se pagó (solo registro, no hay pasarela de pago). Null mientras está pendiente.
   medio_pago          pedido_medio_pago?
   /// A quién se le cobró: consumidor final o una cuenta (nombre / razón social y CUIT). Null mientras está pendiente.
@@ -80,6 +86,7 @@ model pedido {
   detalle_pedido      detalle_pedido[]
   review              review[]
   registro_manual     registro_comanda_manual?
+  historial_estado    historial_estado_pedido[]
   mozo                mozo?                    @relation(fields: [id_mozo], references: [id_mozo], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mozo")
 
   @@index([id_mesa], map: "fk_pedido_mesa")
@@ -123,6 +130,7 @@ model usuario {
   fecha_creacion      DateTime                  @default(now()) @db.DateTime(0)
   fecha_actualizacion DateTime                  @default(now()) @updatedAt @db.DateTime(0)
   registro_manual     registro_comanda_manual[]
+  historial_estado    historial_estado_pedido[]
 }
 
 /// Registro de las comandas que el personal de Barra carga a mano (clientes que no usan el QR).
@@ -137,6 +145,25 @@ model mozo {
   fecha_creacion      DateTime @default(now()) @db.DateTime(0)
   fecha_actualizacion DateTime @default(now()) @updatedAt @db.DateTime(0)
   pedido              pedido[]
+}
+
+/// Quién y cuándo cambió el estado de cada pedido (incluye el alta y los "volver atrás").
+model historial_estado_pedido {
+  id_historial    Int            @id @default(autoincrement())
+  id_pedido       Int
+  /// Null en el alta del pedido.
+  estado_anterior pedido_estado?
+  estado_nuevo    pedido_estado
+  /// Null cuando lo hizo el cliente (alta por QR).
+  id_usuario      Int?
+  fecha_hora      DateTime       @default(now()) @db.DateTime(0)
+  /// Motivo de la cancelación, si corresponde.
+  motivo          String?        @db.VarChar(255)
+  pedido          pedido         @relation(fields: [id_pedido], references: [id_pedido], onDelete: NoAction, onUpdate: NoAction, map: "fk_historial_estado_pedido")
+  usuario         usuario?       @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "fk_historial_estado_usuario")
+
+  @@index([id_pedido], map: "fk_historial_estado_pedido")
+  @@index([id_usuario], map: "fk_historial_estado_usuario")
 }
 
 model registro_comanda_manual {

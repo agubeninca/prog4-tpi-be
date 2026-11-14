@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Sse,
 } from '@nestjs/common';
 import { Public, Roles, UsuarioActual } from '../auth/decorators.js';
 import type { UsuarioAutenticado } from '../auth/auth.types.js';
@@ -54,6 +55,30 @@ export class PedidosController {
     return this.pedidosService.findRegistroManual(filtro);
   }
 
+  /** Pedidos recientes del cliente (por DNI), para "pedir de nuevo". */
+  @Public()
+  @Get('mios')
+  findRecientesDelCliente(@Query() { dni }: ConsultaPedidoClienteDto) {
+    return this.pedidosService.findRecientesDelCliente(dni);
+  }
+
+  /** El cliente se entera al instante de que su pedido avanzó (Server-Sent Events). */
+  @Public()
+  @Sse(':id/eventos')
+  eventosDelPedido(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() { dni }: ConsultaPedidoClienteDto,
+  ) {
+    return this.pedidosService.eventosDelPedido(id, dni);
+  }
+
+  /** Quién y cuándo cambió el estado del pedido. */
+  @Roles('ADMIN', 'BARRA')
+  @Get(':id/historial')
+  findHistorial(@Param('id', ParseIntPipe) id: number) {
+    return this.pedidosService.findHistorial(id);
+  }
+
   @Public()
   @Get(':id')
   findOneParaCliente(
@@ -69,8 +94,13 @@ export class PedidosController {
   cambiarEstado(
     @Param('id', ParseIntPipe) id: number,
     @Body() cambiarEstadoPedidoDto: CambiarEstadoPedidoDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ) {
-    return this.pedidosService.cambiarEstado(id, cambiarEstadoPedidoDto);
+    return this.pedidosService.cambiarEstado(
+      id,
+      cambiarEstadoPedidoDto,
+      usuario,
+    );
   }
 
   /** La barra (o el admin) marca el pedido como pagado o pendiente de pago. */

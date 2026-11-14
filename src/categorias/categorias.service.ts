@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -11,14 +12,46 @@ import { UpdateCategoriaDto } from './dto/update-categoria.dto.js';
 export class CategoriasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createCategoriaDto: CreateCategoriaDto) {
-    return this.prisma.categoria.create({ data: createCategoriaDto });
+  async create(createCategoriaDto: CreateCategoriaDto) {
+    // La nueva categoría va al final del menú.
+    const { _max } = await this.prisma.categoria.aggregate({
+      _max: { orden: true },
+    });
+    return this.prisma.categoria.create({
+      data: { ...createCategoriaDto, orden: (_max.orden ?? 0) + 1 },
+    });
+  }
+
+  /** Fija el orden del menú: el primer id queda en la posición 1. Tienen que estar todas las categorías. */
+  async ordenar(ids: number[]) {
+    const categorias = await this.prisma.categoria.findMany({
+      where: { archivado: false },
+      select: { id_categoria: true },
+    });
+    const existentes = new Set(categorias.map((c) => c.id_categoria));
+    if (
+      ids.length !== existentes.size ||
+      !ids.every((id) => existentes.has(id))
+    ) {
+      throw new BadRequestException(
+        'La lista tiene que incluir todas las categorías, sin repetir ni agregar otras',
+      );
+    }
+    await this.prisma.$transaction(
+      ids.map((id_categoria, indice) =>
+        this.prisma.categoria.update({
+          where: { id_categoria },
+          data: { orden: indice + 1 },
+        }),
+      ),
+    );
+    return this.findAll();
   }
 
   findAll() {
     return this.prisma.categoria.findMany({
       where: { archivado: false },
-      orderBy: { nombre: 'asc' },
+      orderBy: [{ orden: 'asc' }, { nombre: 'asc' }],
       include: {
         _count: { select: { producto: { where: { archivado: false } } } },
       },
