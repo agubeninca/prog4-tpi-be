@@ -40,6 +40,8 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 
 **Mozos:** no inician sesión. Al cargar una comanda a mano se elige el mozo que atiende la mesa, y la mesa queda a su nombre hasta que todos sus pedidos estén pagados o cancelados (mientras tanto, otro mozo no puede cargarle comandas). El seed precarga 4 de ejemplo (Juan, María, Lucas y Sofía), que se editan desde la pestaña **Mozos** del panel de Admin.
 
+**Caja por turnos:** para cobrar tiene que haber un turno de caja abierto. La Barra (o el admin) lo abre en **Caja y turnos** eligiendo mañana, tarde o noche y el efectivo inicial; cada cobro queda en ese turno. En el cambio de turno se cierra contando la plata de la caja: el sistema la compara con lo esperado (inicial + cobrado en efectivo), muestra si sobra o falta y guarda el resumen tal como quedó. Los cobros de un turno cerrado ya no se pueden modificar.
+
 ## Endpoints
 
 | Método | Ruta | Acceso |
@@ -61,7 +63,7 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | GET (SSE) | `/pedidos/:id/eventos?dni=` | Público (solo con el DNI del pedido; Server-Sent Events: el cliente se entera al instante de cada cambio de estado; se cierra solo al llegar a SERVIDO o CANCELADO) |
 | GET | `/pedidos/:id/historial` | ADMIN, BARRA (quién cambió cada estado y cuándo; el alta por QR figura sin usuario) |
 | PATCH | `/pedidos/:id/estado` | ADMIN, BARRA (COCINA solo visualiza el panel). Transiciones: PENDIENTE → EN_PREPARACION o CANCELADO; EN_PREPARACION → SERVIDO, CANCELADO o **PENDIENTE** (volver atrás un pedido pasado por error); SERVIDO y CANCELADO son finales |
-| PATCH | `/pedidos/:id/pago` | ADMIN, BARRA (`{ "pagado": "PENDIENTE" \| "PAGADO", "medio_pago"?, "facturacion"?, "cuenta_nombre"?, "cuenta_cuit"? }`; el medio es obligatorio al marcarlo pagado: EFECTIVO, DEBITO, CREDITO, MERCADO_PAGO, TRANSFERENCIA o CUENTA_CORRIENTE. `facturacion`: CONSUMIDOR_FINAL (por defecto) o CUENTA; con CUENTA, `cuenta_nombre` (nombre o razón social) es obligatorio y `cuenta_cuit` opcional (11 dígitos, con o sin guiones). Pagado, se puede volver a llamar para corregir el cobro; al volverlo a pendiente se borran esos datos. Un pedido cancelado no se puede marcar como pagado) |
+| PATCH | `/pedidos/:id/pago` | ADMIN, BARRA (para cobrar tiene que haber un turno de caja abierto; los cobros de un turno cerrado no se pueden modificar. `{ "pagado": "PENDIENTE" \| "PAGADO", "medio_pago"?, "facturacion"?, "cuenta_nombre"?, "cuenta_cuit"? }`; el medio es obligatorio al marcarlo pagado: EFECTIVO, DEBITO, CREDITO, MERCADO_PAGO, TRANSFERENCIA o CUENTA_CORRIENTE. `facturacion`: CONSUMIDOR_FINAL (por defecto) o CUENTA; con CUENTA, `cuenta_nombre` (nombre o razón social) es obligatorio y `cuenta_cuit` opcional (11 dígitos, con o sin guiones). Pagado, se puede volver a llamar para corregir el cobro; al volverlo a pendiente se borran esos datos. Un pedido cancelado no se puede marcar como pagado) |
 | CRUD | `/categorias`, `/productos`, `/mesas`, `/usuarios` | ADMIN |
 | GET | `/clientes?q=` · `/clientes/:dni` | ADMIN (listado con métricas · ficha con pedidos y reviews) |
 | PATCH | `/clientes/:dni` | ADMIN (corregir el nombre) |
@@ -70,7 +72,11 @@ La primera vez crea el `.env` y te pide completar `DATABASE_URL` con el usuario 
 | PUT | `/categorias/orden` · `/productos/orden` | ADMIN (orden del menú: `{ "ids": [...] }` con TODAS las categorías; `{ "id_categoria", "ids": [...] }` con TODOS los productos de esa categoría) |
 | POST | `/mesas/:id/regenerar-qr` | ADMIN |
 | GET | `/reviews?desde=&hasta=&dni=` · `/reportes/ventas-dia?fecha=` | ADMIN |
-| GET | `/reportes/cierre-caja?fecha=` | ADMIN, BARRA (cobrado del día por medio de pago —por la fecha en que se cobró—, efectivo que debe haber en la caja, facturado a cuentas, servidos sin cobrar de cualquier día, en curso y cancelados) |
+| GET | `/reportes/cierre-caja?fecha=` | ADMIN, BARRA (cobrado del día por medio de pago —por la fecha en que se cobró—, cobrado en efectivo, por mozo, facturado a cuentas, servidos sin cobrar de cualquier día, en curso y cancelados) |
+| GET | `/turnos/actual` | ADMIN, BARRA (turno de caja abierto con su resumen en vivo y el `efectivo_esperado`; vacío si no hay ninguno) |
+| POST | `/turnos/abrir` | ADMIN, BARRA (`{ "nombre": "MANANA" \| "TARDE" \| "NOCHE", "efectivo_inicial" }`; solo puede haber un turno abierto) |
+| POST | `/turnos/cerrar` | ADMIN, BARRA (`{ "efectivo_contado", "observacion"? }`: arqueo contra lo esperado y resumen congelado) |
+| GET | `/turnos?desde=&hasta=` | ADMIN, BARRA (turnos cerrados con su arqueo y resumen, los más nuevos primero) |
 | GET | `/reportes/estadisticas?dias=7\|30\|90` | ADMIN (ventas por día y por hora, top 10 de productos y ventas por mozo; cuenta solo pedidos servidos) |
 | DELETE | `/reviews/:id` | ADMIN (borrado definitivo de una review) |
 | POST | `/errores` | Público (el frontend reporta sus errores; se guardan en Firestore) |

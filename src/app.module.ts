@@ -15,6 +15,7 @@ import { ClientesModule } from './clientes/clientes.module.js';
 import { PedidosModule } from './pedidos/pedidos.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
 import { ReportesModule } from './reportes/reportes.module.js';
+import { TurnosModule } from './turnos/turnos.module.js';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ReportesModule } from './reportes/reportes.module.js';
     PedidosModule,
     ReviewsModule,
     ReportesModule,
+    TurnosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

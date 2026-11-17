@@ -59,38 +59,42 @@ model mesa {
 }
 
 model pedido {
-  id_pedido           Int                      @id @default(autoincrement())
+  id_pedido           Int                       @id @default(autoincrement())
   id_mesa             Int
-  dni_cliente         String                   @db.VarChar(10)
-  fecha_hora_ingreso  DateTime                 @default(now()) @db.DateTime(0)
-  estado              pedido_estado            @default(PENDIENTE)
-  pagado              pedido_pago              @default(PENDIENTE)
+  dni_cliente         String                    @db.VarChar(10)
+  fecha_hora_ingreso  DateTime                  @default(now()) @db.DateTime(0)
+  estado              pedido_estado             @default(PENDIENTE)
+  pagado              pedido_pago               @default(PENDIENTE)
   /// Cuándo se cobró (null mientras está pendiente). Es la fecha que usa el cierre de caja.
-  fecha_pago          DateTime?                @db.DateTime(0)
+  fecha_pago          DateTime?                 @db.DateTime(0)
+  /// Turno de caja en el que se cobró (null mientras está pendiente y en los cobrados antes de los turnos).
+  id_turno_pago       Int?
   /// Con qué se pagó (solo registro, no hay pasarela de pago). Null mientras está pendiente.
   medio_pago          pedido_medio_pago?
   /// A quién se le cobró: consumidor final o una cuenta (nombre / razón social y CUIT). Null mientras está pendiente.
   facturacion         pedido_facturacion?
   /// Nombre o razón social de la cuenta (solo si facturacion = CUENTA).
-  cuenta_nombre       String?                  @db.VarChar(150)
+  cuenta_nombre       String?                   @db.VarChar(150)
   /// CUIT de la cuenta, 11 dígitos sin guiones (opcional).
-  cuenta_cuit         String?                  @db.VarChar(11)
-  origen              pedido_origen            @default(QR)
+  cuenta_cuit         String?                   @db.VarChar(11)
+  origen              pedido_origen             @default(QR)
   /// Mozo que atiende la mesa (solo en comandas cargadas a mano; null en las del QR).
   id_mozo             Int?
-  motivo_cancelacion  String?                  @db.VarChar(255)
-  precio_total        Decimal                  @db.Decimal(10, 2)
-  fecha_actualizacion DateTime                 @default(now()) @updatedAt @db.DateTime(0)
-  mesa                mesa                     @relation(fields: [id_mesa], references: [id_mesa], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mesa")
-  cliente             cliente                  @relation(fields: [dni_cliente], references: [dni], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_cliente")
+  motivo_cancelacion  String?                   @db.VarChar(255)
+  precio_total        Decimal                   @db.Decimal(10, 2)
+  fecha_actualizacion DateTime                  @default(now()) @updatedAt @db.DateTime(0)
+  mesa                mesa                      @relation(fields: [id_mesa], references: [id_mesa], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mesa")
+  cliente             cliente                   @relation(fields: [dni_cliente], references: [dni], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_cliente")
   detalle_pedido      detalle_pedido[]
   review              review[]
   registro_manual     registro_comanda_manual?
   historial_estado    historial_estado_pedido[]
-  mozo                mozo?                    @relation(fields: [id_mozo], references: [id_mozo], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mozo")
+  mozo                mozo?                     @relation(fields: [id_mozo], references: [id_mozo], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_mozo")
+  turno_pago          turno?                    @relation(fields: [id_turno_pago], references: [id_turno], onDelete: NoAction, onUpdate: NoAction, map: "fk_pedido_turno_pago")
 
   @@index([id_mesa], map: "fk_pedido_mesa")
   @@index([id_mozo], map: "fk_pedido_mozo")
+  @@index([id_turno_pago], map: "fk_pedido_turno_pago")
   @@index([dni_cliente], map: "fk_pedido_cliente")
   @@index([estado, fecha_hora_ingreso], map: "idx_pedido_estado_fecha")
 }
@@ -131,9 +135,10 @@ model usuario {
   fecha_actualizacion DateTime                  @default(now()) @updatedAt @db.DateTime(0)
   registro_manual     registro_comanda_manual[]
   historial_estado    historial_estado_pedido[]
+  turnos_abiertos     turno[]                   @relation("turno_apertura")
+  turnos_cerrados     turno[]                   @relation("turno_cierre")
 }
 
-/// Registro de las comandas que el personal de Barra carga a mano (clientes que no usan el QR).
 /// Mozos del salón: se eligen al cargar una comanda a mano. No inician sesión.
 /// Una mesa queda "tomada" por el mozo mientras tenga pedidos suyos sin pagar ni cancelar.
 model mozo {
@@ -166,6 +171,37 @@ model historial_estado_pedido {
   @@index([id_usuario], map: "fk_historial_estado_usuario")
 }
 
+/// Turno de caja: se abre con el efectivo inicial y se cierra en el cambio de turno contando la plata (arqueo).
+/// Cada cobro queda en el turno abierto en ese momento; al cerrar se congela el resumen.
+model turno {
+  id_turno            Int          @id @default(autoincrement())
+  nombre              turno_nombre
+  /// true mientras está abierto y null al cerrarlo: al ser único, no puede haber dos turnos abiertos.
+  abierto             Boolean?     @unique(map: "uq_turno_abierto")
+  fecha_apertura      DateTime     @default(now()) @db.DateTime(0)
+  id_usuario_apertura Int
+  /// Fondo de caja con el que arranca el turno.
+  efectivo_inicial    Decimal      @db.Decimal(10, 2)
+  fecha_cierre        DateTime?    @db.DateTime(0)
+  id_usuario_cierre   Int?
+  /// Efectivo inicial + lo cobrado en efectivo durante el turno.
+  efectivo_esperado   Decimal?     @db.Decimal(10, 2)
+  /// Lo que se contó en la caja al cerrar.
+  efectivo_contado    Decimal?     @db.Decimal(10, 2)
+  /// Contado − esperado: positivo sobra, negativo falta.
+  diferencia          Decimal?     @db.Decimal(10, 2)
+  observacion_cierre  String?      @db.VarChar(255)
+  /// Resumen del cierre (cobrado por medio, cuentas, pendientes), tal como estaba al cerrar.
+  resumen             Json?
+  usuario_apertura    usuario      @relation("turno_apertura", fields: [id_usuario_apertura], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "fk_turno_usuario_apertura")
+  usuario_cierre      usuario?     @relation("turno_cierre", fields: [id_usuario_cierre], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "fk_turno_usuario_cierre")
+  pedidos_cobrados    pedido[]
+
+  @@index([id_usuario_apertura], map: "fk_turno_usuario_apertura")
+  @@index([id_usuario_cierre], map: "fk_turno_usuario_cierre")
+}
+
+/// Registro de las comandas que el personal de Barra carga a mano (clientes que no usan el QR).
 model registro_comanda_manual {
   id_registro Int      @id @default(autoincrement())
   id_pedido   Int      @unique(map: "uq_registro_manual_pedido")
@@ -180,6 +216,12 @@ model registro_comanda_manual {
 
   @@index([id_usuario], map: "fk_registro_manual_usuario")
   @@index([fecha_hora], map: "idx_registro_manual_fecha")
+}
+
+enum turno_nombre {
+  MANANA
+  TARDE
+  NOCHE
 }
 
 enum pedido_estado {

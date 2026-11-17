@@ -1,13 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
 import dayjs from 'dayjs';
-import {
-  pedido_estado,
-  pedido_medio_pago,
-  pedido_pago,
-} from '../../generated/prisma/client.js';
+import { pedido_estado, pedido_pago } from '../../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { rangoDelDia } from '../common/fechas.js';
+import { resumirCobros, SELECT_COBRO, sumar } from './resumen-cobros.js';
 
 @Injectable()
 export class ReportesService {
@@ -55,18 +52,23 @@ export class ReportesService {
     const { fecha, desde, hasta } = rangoDelDia(fechaConsulta);
     const delDia = { gte: desde, lte: hasta };
 
-    const [cobrados, sinCobrar, enCurso, cancelados] = await Promise.all([
+    const [cobrados, pendientes] = await Promise.all([
       this.prisma.pedido.findMany({
         where: { pagado: pedido_pago.PAGADO, fecha_pago: delDia },
-        select: {
-          id_pedido: true,
-          precio_total: true,
-          medio_pago: true,
-          facturacion: true,
-          cuenta_nombre: true,
-          cuenta_cuit: true,
-        },
+        select: SELECT_COBRO,
       }),
+      this.pendientes({ fecha_hora_ingreso: delDia }),
+    ]);
+
+    return { fecha, cobrado: resumirCobros(cobrados), ...pendientes };
+  }
+
+  /**
+   * Plata que todavía no entró: lo servido sin cobrar (de cualquier día, porque se debe) y lo que
+   * está en curso y lo cancelado dentro del período indicado. Lo usan el cierre del día y el del turno.
+   */
+  async pendientes(periodo: { fecha_hora_ingreso: { gte: Date; lte?: Date } }) {
+    const [sinCobrar, enCurso, cancelados] = await Promise.all([
       this.prisma.pedido.findMany({
         where: {
           estado: pedido_estado.SERVIDO,
@@ -83,7 +85,7 @@ export class ReportesService {
       }),
       this.prisma.pedido.aggregate({
         where: {
-          fecha_hora_ingreso: delDia,
+          ...periodo,
           estado: {
             in: [pedido_estado.PENDIENTE, pedido_estado.EN_PREPARACION],
           },
@@ -92,71 +94,16 @@ export class ReportesService {
         _count: true,
       }),
       this.prisma.pedido.aggregate({
-        where: { fecha_hora_ingreso: delDia, estado: pedido_estado.CANCELADO },
+        where: { ...periodo, estado: pedido_estado.CANCELADO },
         _sum: { precio_total: true },
         _count: true,
       }),
     ]);
 
-    const suma = (valores: { toString(): string }[]) =>
-      valores.reduce<Decimal>(
-        (total, valor) => total.plus(valor.toString()),
-        new Decimal(0),
-      );
-
-    // Por medio de pago (los que no tienen medio cargado quedan como "sin_medio").
-    const medios = [
-      ...Object.values(pedido_medio_pago),
-      null,
-    ] as (pedido_medio_pago | null)[];
-    const por_medio = medios
-      .map((medio) => {
-        const delMedio = cobrados.filter((p) => p.medio_pago === medio);
-        return {
-          medio: medio ?? 'SIN_MEDIO',
-          cantidad: delMedio.length,
-          total: suma(delMedio.map((p) => p.precio_total)).toFixed(2),
-        };
-      })
-      .filter((fila) => fila.cantidad > 0);
-
-    // Cobrado a nombre de una cuenta (nombre / razón social y CUIT).
-    const cuentas = new Map<
-      string,
-      { nombre: string; cuit: string | null; cantidad: number; total: Decimal }
-    >();
-    for (const p of cobrados.filter((x) => x.facturacion === 'CUENTA')) {
-      const clave = `${p.cuenta_nombre ?? ''}|${p.cuenta_cuit ?? ''}`;
-      const fila = cuentas.get(clave) ?? {
-        nombre: p.cuenta_nombre ?? 'Sin nombre',
-        cuit: p.cuenta_cuit,
-        cantidad: 0,
-        total: new Decimal(0),
-      };
-      fila.cantidad += 1;
-      fila.total = fila.total.plus(p.precio_total.toString());
-      cuentas.set(clave, fila);
-    }
-
-    const efectivo = por_medio.find(
-      (fila) => fila.medio === pedido_medio_pago.EFECTIVO,
-    );
     return {
-      fecha,
-      cobrado: {
-        total: suma(cobrados.map((p) => p.precio_total)).toFixed(2),
-        cantidad: cobrados.length,
-        por_medio,
-        /** Billetes en la caja: solo el cobro en efectivo. */
-        efectivo_en_caja: efectivo?.total ?? '0.00',
-        cuentas: [...cuentas.values()].map((c) => ({
-          ...c,
-          total: c.total.toFixed(2),
-        })),
-      },
       sin_cobrar: {
         cantidad: sinCobrar.length,
-        total: suma(sinCobrar.map((p) => p.precio_total)).toFixed(2),
+        total: sumar(sinCobrar.map((p) => p.precio_total)).toFixed(2),
         pedidos: sinCobrar,
       },
       en_curso: {

@@ -27,6 +27,7 @@ import type { UsuarioAutenticado } from '../auth/auth.types.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { rangoDelDia } from '../common/fechas.js';
 import { mozosPorMesa } from '../mozos/mesas-atendidas.js';
+import { describirTurno } from '../turnos/etiquetas.js';
 import { ComandasService } from './comandas.service.js';
 import { PedidosEventosService } from './pedidos-eventos.service.js';
 import { registrarCambioEstado } from './historial-estado.js';
@@ -434,13 +435,40 @@ export class PedidosService {
         'No se puede marcar como pagado un pedido cancelado',
       );
     }
+    // Un cobro de un turno ya cerrado no se toca: su cierre de caja quedó congelado.
+    if (pedido.pagado === pedido_pago.PAGADO && pedido.id_turno_pago) {
+      const turnoDelCobro = await this.prisma.turno.findUnique({
+        where: { id_turno: pedido.id_turno_pago },
+      });
+      if (turnoDelCobro && !turnoDelCobro.abierto) {
+        throw new ConflictException(
+          `Este pedido se cobró en el ${describirTurno(turnoDelCobro)}, que ya está cerrado: no se puede modificar el cobro`,
+        );
+      }
+    }
 
-    // Fecha de cobro (cierre de caja): se fija al pasar a pagado y se conserva si solo se corrigen los datos.
-    const fecha_pago = esPagado ? (pedido.fecha_pago ?? new Date()) : null;
-    const actualizado = await this.prisma.pedido.update({
-      where: { id_pedido: id },
-      data: { ...datos, fecha_pago },
-      include: INCLUDE_PEDIDO,
+    const esCobroNuevo = esPagado && pedido.pagado !== pedido_pago.PAGADO;
+    const actualizado = await this.prisma.$transaction(async (tx) => {
+      // Un cobro nuevo va al turno de caja abierto (sin turno abierto no se puede cobrar).
+      // El turno queda bloqueado hasta terminar, para que no se cierre en el medio.
+      let id_turno_pago = esPagado ? pedido.id_turno_pago : null;
+      if (esCobroNuevo) {
+        const [turno] = await tx.$queryRaw<{ id_turno: number }[]>`
+          SELECT id_turno FROM turno WHERE abierto = 1 FOR UPDATE`;
+        if (!turno) {
+          throw new ConflictException(
+            'No hay un turno de caja abierto: abrí uno desde Caja para poder cobrar',
+          );
+        }
+        id_turno_pago = turno.id_turno;
+      }
+      // Fecha de cobro (cierre de caja): se fija al pasar a pagado y se conserva si solo se corrigen los datos.
+      const fecha_pago = esPagado ? (pedido.fecha_pago ?? new Date()) : null;
+      return tx.pedido.update({
+        where: { id_pedido: id },
+        data: { ...datos, fecha_pago, id_turno_pago },
+        include: INCLUDE_PEDIDO,
+      });
     });
 
     await this.comandas.sincronizar(actualizado);
